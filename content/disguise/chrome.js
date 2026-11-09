@@ -77,11 +77,18 @@ let ghLastPagerSweep = 0;
 /* 双栏（Canvas 位图）放侧栏：正文一个像素都不动，把侧栏直接盖在书页左侧的页边空白上。
  * 空白宽度靠读 canvas 像素实测（找第一列有墨迹的 x），侧栏宽度随之自适应；
  * 宁可窄也不压字 —— 留白不够就直接不显示。 */
-const GH_SIDEBAR_MIN_W = 120; // 窄于这个宽度，文件树没有意义
+const GH_SIDEBAR_MIN_W = 72; // 窄于这个宽度，文件树没有意义（极窄时只留图标 + 截断文件名）
+
+// 视觉宽度低于这个值时切「极窄档」：隐藏装饰文字，只留图标 + 截断文件名。
+// 它就是旧版 GH_SIDEBAR_MIN_W（120），独立成常量以免将来改 MIN 时漏改这个档位阈值。
+const GH_SIDEBAR_NARROW_W = 120;
 
 const GH_SIDEBAR_MAX_W = 248;
 
 let ghSidebarVisualW = '';
+
+// 「没量到」的连续重试计数：量到一次就归零，防止真没内容的页面上无限重试
+let ghSidebarNullRetries = 0;
 
 let ghInkCache = { key: '', left: null };
 
@@ -171,7 +178,16 @@ function ghMeasureDoubleColumnLeft() {
         ghInkCache = { key, left: ghCanvasInkLeft(canvas, rect) };
       }
       if (ghInkCache.left !== null) return ghInkCache.left;
-      return rect.left;
+      // 像素读不到（画布被跨域图片污染 / 读回失败）时，别拿 canvas 的 rect.left 兜底：
+      // canvas 可能横跨整个视口（书页卡片画在中间），left=0 会把留白判成 0，
+      // 侧栏就被永久判「放不下」。改用正文卡片容器的真实左边界。
+      const card = document.querySelector('.wr_horizontalReader_app_content')
+        || document.querySelector('.readerChapterContent_container')
+        || document.querySelector('.readerChapterContent');
+      const cardRect = card?.getBoundingClientRect?.();
+      if (cardRect && cardRect.width > 0 && cardRect.left >= 0) return cardRect.left;
+      // 连卡片容器也量不到：不猜 canvas 的 rect.left，返回 null 交给上层重试（绝不压字）。
+      return null;
     }
   }
   const candidates = [
@@ -194,11 +210,14 @@ function ghApplySidebarVisualWidth(widthPx) {
     root.style.setProperty('--wre-gh-sidebar-visual-w', next);
   }
   root.classList.add('wre-gh-sidebar-ok');
+  // 视觉宽度不足 GH_SIDEBAR_NARROW_W 时进入极窄档：只留图标 + 截断文件名，隐藏装饰文字
+  root.classList.toggle('wre-gh-sidebar-narrow', widthPx < GH_SIDEBAR_NARROW_W);
 }
 
 function ghClearSidebarFits() {
   const root = document.documentElement;
   root.classList.remove('wre-gh-sidebar-ok');
+  root.classList.remove('wre-gh-sidebar-narrow');
   if (ghSidebarVisualW) {
     ghSidebarVisualW = '';
     root.style.removeProperty('--wre-gh-sidebar-visual-w');
@@ -263,8 +282,20 @@ function ghSyncSidebarFits() {
   // 留 10px 呼吸位，绝不贴着字裁断
   const avail = left === null ? 0 : Math.floor(left - 10);
   const width = avail >= GH_SIDEBAR_MIN_W ? Math.min(GH_SIDEBAR_MAX_W, avail) : null;
-  if (width === null) ghClearSidebarFits();
-  else ghApplySidebarVisualWidth(width);
+  if (width === null) {
+    ghClearSidebarFits();
+    // left === null = 「根本没量到」（正文重建中 / canvas 0 尺寸），是暂态；
+    // left 有值但太小才是「真的放不下」的终态。暂态补几次重试：
+    // 之后的同步被尺寸签名去重拦住（内容重建不改签名），不补就没有人再量了。
+    if (left === null && ghSidebarNullRetries < 5) {
+      ghSidebarNullRetries += 1;
+      wreSetTimeout(() => ghSyncSidebarFits(), 500);
+      log('warn', '侧栏留白没量到，稍后重试', { retry: ghSidebarNullRetries, double: isDouble });
+    }
+  } else {
+    ghSidebarNullRetries = 0;
+    ghApplySidebarVisualWidth(width);
+  }
   log('info', '侧栏留白测量', { double: isDouble, textLeft, canvasLeft, left, width });
 
   // 侧栏有无/宽度变了，分页条能用的左边界跟着变：可见时补一次对齐
@@ -558,9 +589,14 @@ function ghSyncChromeInner(force) {
     }
   }
 
-  // 尺寸真的变了才重新量留白（这一步含 getBoundingClientRect，会强制布局）
+  // 尺寸真的变了才重新量留白（这一步含 getBoundingClientRect，会强制布局）。
+  // 例外：侧栏当前处于隐藏态时每次同步都重量——内容重建（DOM 换新、尺寸不变）
+  // 不会改尺寸签名，不补这条，一次暂态量空就会把侧栏一直钉在隐藏态。
+  // 与 ghSyncSidebarFits 里的 500ms 重试分工：timer 管「之后没有任何同步事件」的兜底，
+  // 这里管「同步来了但尺寸签名没变」的兜底，两者一起才覆盖得住「暂态量空」。
   const sizeSig = ghSizeSignature();
-  if (statusChanged || sizeSig !== ghLastSizeSig) {
+  const sidebarHidden = !document.documentElement.classList.contains('wre-gh-sidebar-ok');
+  if (statusChanged || sizeSig !== ghLastSizeSig || sidebarHidden) {
     ghLastSizeSig = sizeSig;
     ghSyncSidebarFits();
   }

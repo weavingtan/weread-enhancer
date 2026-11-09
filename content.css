@@ -1318,6 +1318,22 @@ html.wre-disguise.wre-double-column .wre-gh-side-search kbd {
   display: none;
 }
 
+/* 双栏极窄侧栏（72~119px）：收紧内边距，隐藏 repo 名 / branch 文字 / search 文字，
+ * 只留头像 + 图标列 + 截断文件名，保证很窄时也不挤爆、不换行。 */
+html.wre-disguise.wre-double-column.wre-gh-sidebar-narrow .wre-gh-sidebar {
+  padding: 10px 6px;
+}
+html.wre-disguise.wre-double-column.wre-gh-sidebar-narrow .wre-gh-side-repo-text,
+html.wre-disguise.wre-double-column.wre-gh-sidebar-narrow .wre-gh-side-branch span,
+html.wre-disguise.wre-double-column.wre-gh-sidebar-narrow .wre-gh-side-search span {
+  display: none;
+}
+html.wre-disguise.wre-double-column.wre-gh-sidebar-narrow .wre-gh-side-branch,
+html.wre-disguise.wre-double-column.wre-gh-sidebar-narrow .wre-gh-side-search {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
 /* ========== 皮肤二：Notion 团队文档页（v0.38.0） ==========
  * 白底、顶部面包屑、左侧页面树，语境是「在看公司文档」。
  * 只换外壳与配色，正文布局与滚动/翻页行为完全复用 GitHub 皮肤。 */
