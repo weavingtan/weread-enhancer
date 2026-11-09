@@ -81,6 +81,21 @@ function handleAllKeyboard(event) {
     return;
   }
 
+  // 伪装态的「代码仓库」键位：/ 或 t 打开章节查找器，j / k 上下一章。
+  // 刻意不用 g 前缀（gg/ge）做首末章：g 是伪装开关的救命键，不能为了组合键让它延迟响应。
+  if (WRE_STATE.disguise) {
+    if (event.key === '/' || event.key === 't') {
+      event.preventDefault();
+      ghOpenFinder();
+      return;
+    }
+    if (event.key === 'j' || event.key === 'k') {
+      event.preventDefault();
+      ghStepChapter(event.key === 'j' ? 1 : -1);
+      return;
+    }
+  }
+
   switch (event.key) {
     case ' ':
       event.preventDefault();

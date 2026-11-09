@@ -562,6 +562,14 @@ function ghBindShell(shell) {
     });
   });
 
+  // 顶栏假搜索框：文案写着 Type / to search，就必须真能搜（章节查找器）
+  shell.querySelectorAll('.wre-gh-search, .wre-nb-search').forEach((box) => {
+    box.addEventListener('click', (event) => {
+      event.stopPropagation();
+      ghOpenFinder();
+    });
+  });
+
   shell.querySelectorAll('.wre-gh-pager-btn').forEach((btn) => {
     btn.addEventListener('click', (event) => {
       event.stopPropagation();

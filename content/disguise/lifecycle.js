@@ -105,6 +105,7 @@ function ghSetActive(on) {
   } else {
     ghStopCanvasProbe();
     ghStopLayoutObservers();
+    ghCloseFinder();
     document.documentElement.classList.remove('wre-disguise');
     document.documentElement.classList.remove('wre-gh-dark');
     document.documentElement.classList.remove('wre-double-column');

@@ -313,6 +313,21 @@ function createUI() {
             <tbody>
               <tr class="wre-shortcuts-group"><td colspan="3">插件快捷键</td></tr>
               <tr>
+                <td><span class="wre-shortcut-key">G</span></td>
+                <td>一键切换 伪装视图 / 微信读书原样</td>
+                <td>启用</td>
+              </tr>
+              <tr>
+                <td><span class="wre-shortcut-key">/</span><span class="wre-shortcut-sep">/</span><span class="wre-shortcut-key">T</span></td>
+                <td>章节查找器（伪装态，输入章节名回车跳章）</td>
+                <td>启用</td>
+              </tr>
+              <tr>
+                <td><span class="wre-shortcut-key">J</span><span class="wre-shortcut-sep">/</span><span class="wre-shortcut-key">K</span></td>
+                <td>下一章 / 上一章（伪装态）</td>
+                <td>启用</td>
+              </tr>
+              <tr>
                 <td><span class="wre-shortcut-key">I</span></td>
                 <td>进入 / 退出沉浸模式（隐藏顶部 / 右侧 / 底部，边缘唤出）</td>
                 <td>启用</td>
