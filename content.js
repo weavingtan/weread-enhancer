@@ -2443,13 +2443,19 @@ function ghActivateCatalogItem(el) {
   const parent = el.parentElement;
   if (parent && /item|li/i.test(`${parent.tagName} ${parent.className}`)) targets.push(parent);
   targets.forEach((node) => {
+    // 有些控件要先 hover / focus 才挂上处理器，按真实操作顺序补全事件
+    ['mouseover', 'mouseenter', 'mousemove'].forEach((type) => {
+      node.dispatchEvent(new MouseEvent(type, { bubbles: type !== 'mouseenter', cancelable: true }));
+    });
     try {
       node.dispatchEvent(new PointerEvent('pointerdown', {
         bubbles: true, cancelable: true, pointerType: 'mouse', isPrimary: true,
       }));
     } catch (e) { /* 不支持 PointerEvent 就只发鼠标事件 */ }
+    try { node.focus?.({ preventScroll: true }); } catch (e) { /* 不可聚焦就跳过 */ }
     node.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
     node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+    node.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     node.click();
   });
 }
