@@ -116,6 +116,10 @@ function ghSetActive(on) {
     ghRestorePageIdentity();
     ghChromeSignature = '';
     ghLastSizeSig = '';
+    if (ghModeReflowTrailing) {
+      clearTimeout(ghModeReflowTrailing);
+      ghModeReflowTrailing = null;
+    }
     if (!detectScrollMode()) scheduleWereadLayoutReflow('gh-disguise-off');
     if (ghObserver) {
       ghObserver.disconnect();

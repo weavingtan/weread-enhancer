@@ -241,6 +241,9 @@ let ghLastCardBg = '';
 
 let ghLastModeReflowAt = 0;
 
+// 被节流吞掉的切模式，用这个定时器补最后一次（否则停在旧分页宽度）
+let ghModeReflowTrailing = null;
+
 let ghTopbarH = '';
 
 function ghSizeSignature() {
@@ -278,11 +281,19 @@ function ghSyncChromeInner(force) {
     if (wasDouble !== isDouble) {
       // 模式切换后让微信读书按新容器宽度重排（尤其双栏 Canvas）。
       // 1.2s 内只允许一次：重排期间 canvas 会短暂 0 尺寸，来回翻转会连锁触发，
-      // 表现就是拖一下窗口「连刷两下」。
+      // 表现就是拖一下窗口「连刷两下」。被吞掉的那次用 trailing 定时器补上，
+      // 不然快速来回切之后会停在旧的分页宽度。
       const now = Date.now();
-      if (now - ghLastModeReflowAt > 1200) {
+      const wait = ghLastModeReflowAt + 1200 - now;
+      if (wait <= 0) {
         ghLastModeReflowAt = now;
         setTimeout(() => triggerWereadLayoutReflow('gh-mode-switch'), 120);
+      } else if (!ghModeReflowTrailing) {
+        ghModeReflowTrailing = setTimeout(() => {
+          ghModeReflowTrailing = null;
+          ghLastModeReflowAt = Date.now();
+          triggerWereadLayoutReflow('gh-mode-switch-trailing');
+        }, wait + 120);
       }
     }
   }

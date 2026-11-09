@@ -203,10 +203,6 @@ function getReaderContainerElement() {
   return document.querySelector('.readerChapterContent_container');
 }
 
-function waitNextFrame() {
-  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
-}
-
 async function measureDefaultBaseWidthPx() {
   // 基准取 .readerChapterContent_container 自身的宽度：它不受屏占比 CSS 影响（CSS 只作用于
   // .readerChapterContent / .app_content）。不再临时清空 styleTag，避免启动瞬间正文宽度反复
@@ -242,17 +238,4 @@ async function primeScreenBasePx(force) {
   log('info', '已初始化 screenBasePx', { screenBasePx: WRE_STATE.screenBasePx });
 }
 
-async function resetScreenBasePx() {
-  const width = await measureDefaultBaseWidthPx();
-  if (!width) {
-    log('warn', '重置 screenBasePx 失败（未找到阅读内容元素）');
-    return;
-  }
-  WRE_STATE.screenBasePx = width;
-  WRE_STATE.screenBaseMode = WRE_DEFAULT_STATE.screenBaseMode;
-  await saveState();
-  log('info', '已重置 screenBasePx', { screenBasePx: WRE_STATE.screenBasePx });
-  const applied = applyScreenRatio(WRE_STATE.screenRatio);
-  scheduleWereadLayoutReflow('reset-base');
-  log('info', '已重置基准并重新应用屏占比', applied);
-}
+

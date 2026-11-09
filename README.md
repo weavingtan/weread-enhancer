@@ -38,7 +38,7 @@ weread-enhancer/
 │   ├── features/          # 沉浸模式、自动阅读、主题背景色、Canvas 自愈、快捷键
 │   ├── ui.js              # 设置面板与事件绑定
 │   ├── disguise/          # GitHub / Notion 伪装：骨架、目录跳章、标签页身份、伪分页、生命周期
-│   └── boot.js            # init 入口（必须最后加载）
+│   └── boot.js            # init（状态→主题→面板→伪装→屏占比就绪轮询），必须最后加载
 ├── content.css            # 伪装样式（html.wre-disguise 总开关）+ 设置面板样式
 ├── popup.html / popup.js / popup.css   # 工具栏弹窗
 ├── icons/                 # 插件图标
