@@ -154,6 +154,27 @@ function bindEvents(root) {
     });
   }
 
+  // 伪装开关：伪装态下唯一的设置入口（顶栏头像）打开的就是这个面板
+  const disguiseToggle = root.querySelector('#wre-disguise-toggle');
+  if (disguiseToggle) {
+    disguiseToggle.addEventListener('click', (event) => {
+      event.stopPropagation();
+      ghToggle();
+      updateDisguiseUI();
+    });
+  }
+
+  // 伪装皮肤：切皮肤会整体重建骨架（结构 + 文案 + 侧栏）
+  const skinToggle = root.querySelector('#wre-skin-toggle');
+  if (skinToggle) {
+    skinToggle.addEventListener('click', (event) => {
+      const btn = event.target.closest('button[data-skin]');
+      if (!btn) return;
+      event.stopPropagation();
+      setDisguiseSkin(btn.getAttribute('data-skin'));
+    });
+  }
+
   // 沉浸模式开关（设置面板按钮）
   const immersiveToggle = root.querySelector('#wre-immersive-toggle');
   if (immersiveToggle) {
@@ -243,6 +264,9 @@ function bindEvents(root) {
     });
     updateThemeUI();
   }
+
+  updateDisguiseUI();
+  updateSkinUI();
 }
 
 function handleMenuClick(action) {
@@ -278,6 +302,8 @@ function handleMenuClick(action) {
         applyTheme();
         updateThemeUI();
         updateBgThemeUI();
+        updateDisguiseUI();
+        updateSkinUI();
       }
       log('warn', '已恢复默认设置', applied);
       break;

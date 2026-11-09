@@ -551,6 +551,17 @@ function ghShellHtmlNotion() {
 }
 
 function ghBindShell(shell) {
+  // 顶栏头像 = 伪装态下唯一的设置入口（真 GitHub 的头像菜单也是点开个人项，
+  // 只是我们直接给插件设置面板；悬浮球在伪装态被隐藏，不接这条线就无入口）
+  shell.querySelectorAll('.wre-gh-avatar').forEach((avatar) => {
+    avatar.addEventListener('click', (event) => {
+      event.stopPropagation();
+      openModal('#wre-read-settings-modal');
+      updateDisguiseUI();
+      updateSkinUI();
+    });
+  });
+
   shell.querySelectorAll('.wre-gh-pager-btn').forEach((btn) => {
     btn.addEventListener('click', (event) => {
       event.stopPropagation();

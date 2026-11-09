@@ -336,6 +336,13 @@
   color: #fff;
 }
 
+/* 伪装开关的开启态 */
+.wre-btn.wre-toggle-on {
+  background: var(--wre-primary);
+  border-color: var(--wre-primary);
+  color: #fff;
+}
+
 .wre-quick-actions {
   margin-top: 10px;
   display: flex;
@@ -622,6 +629,11 @@ html.wre-disguise .wr_mask {
 /* 悬浮球在伪装态完全隐藏（可疑） */
 html.wre-disguise #we-read-enhancer-root .wre-fab {
   display: none !important;
+}
+/* 伪装骨架的层级在 21474829xx，设置面板（从顶栏头像打开）必须抬到它上面，
+   否则弹层会被假顶栏 / 假侧栏盖住一半 */
+html.wre-disguise #we-read-enhancer-root {
+  z-index: 2147483100;
 }
 html.wre-disguise body {
   background: var(--wre-gh-page-bg) !important;

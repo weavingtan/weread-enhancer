@@ -30,6 +30,40 @@ function wreCurrentSkin() {
   return WRE_STATE.skin === 'notion' ? 'notion' : 'github';
 }
 
+// 伪装开关 / 皮肤在设置面板里的按钮态。面板是伪装态下唯一的设置入口（顶栏头像打开），
+// popup 改完状态后也要回写这里，否则会出现「popup 切了皮肤、面板还亮着旧的」。
+function updateDisguiseUI() {
+  if (!wreRoot) return;
+  const btn = wreRoot.querySelector('#wre-disguise-toggle');
+  const text = wreRoot.querySelector('#wre-disguise-toggle-text');
+  const on = !!WRE_STATE.disguise;
+  if (text) text.textContent = on ? '伪装已开启 · 点击退出' : '伪装已关闭 · 点击进入';
+  if (btn) btn.classList.toggle('wre-toggle-on', on);
+}
+
+function updateSkinUI() {
+  if (!wreRoot) return;
+  const skin = wreCurrentSkin();
+  wreRoot.querySelectorAll('#wre-skin-toggle button[data-skin]').forEach((btn) => {
+    btn.classList.toggle('wre-theme-active', btn.getAttribute('data-skin') === skin);
+  });
+}
+
+function setDisguiseSkin(skin) {
+  const next = skin === 'notion' ? 'notion' : 'github';
+  if (next === wreCurrentSkin()) return;
+  WRE_STATE.skin = next;
+  saveState();
+  // 皮肤描述的是骨架结构，必须整体重建（侧栏树、面包屑文案、图标全都换）
+  ghEnsureShell(true);
+  if (WRE_STATE.disguise) {
+    ghApplyPageIdentity();
+    ghSyncChrome(true);
+  }
+  updateSkinUI();
+  log('info', '伪装皮肤已切换', { skin: next });
+}
+
 const WRE_SVG = {
   logo: '<svg class="wre-gh-ico" viewBox="0 0 16 16" width="26" height="26" aria-hidden="true"><path fill="#fff" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>',
   search: '<svg class="wre-gh-ico" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>',

@@ -151,6 +151,7 @@ function ghApplyStateFromStorage(next) {
       ghApplyPageIdentity(); // 标题 / 图标一起换，避免「Notion 页面 + GitHub 标题」
       ghSyncChrome(true);
     }
+    updateSkinUI();
   }
   if (merged.theme !== prev.theme) {
     applyTheme();
@@ -183,6 +184,7 @@ function ghApplyStateFromStorage(next) {
   }
   if (merged.disguise !== prev.disguise) {
     ghSetActive(merged.disguise);
+    updateDisguiseUI();
   }
 }
 

@@ -212,6 +212,27 @@ function createUI() {
         </div>
         <div class="wre-modal-body">
           <div class="wre-setting-item">
+            <label class="wre-setting-label">🕶 伪装视图</label>
+            <div class="wre-setting-control">
+              <button class="wre-btn" id="wre-disguise-toggle">
+                <span id="wre-disguise-toggle-text">伪装已开启 · 点击退出</span>
+              </button>
+            </div>
+            <div class="wre-setting-tip">把阅读页画成 GitHub 仓库页（伪装态下点顶栏头像即可回到这里）；快捷键 G 随时切换。</div>
+          </div>
+
+          <div class="wre-setting-item">
+            <label class="wre-setting-label">🎭 伪装皮肤</label>
+            <div class="wre-setting-control">
+              <div class="wre-theme-toggle" id="wre-skin-toggle">
+                <button class="wre-btn wre-btn-small" data-skin="github">GitHub</button>
+                <button class="wre-btn wre-btn-small" data-skin="notion">Notion</button>
+              </div>
+            </div>
+            <div class="wre-setting-tip">GitHub = 代码仓库页；Notion = 团队文档页。切换后标题、图标与侧栏一起更换。</div>
+          </div>
+
+          <div class="wre-setting-item">
             <label class="wre-setting-label">🔮 沉浸模式</label>
             <div class="wre-setting-control">
               <button class="wre-btn" id="wre-immersive-toggle">进入沉浸模式</button>
