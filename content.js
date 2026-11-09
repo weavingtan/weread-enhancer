@@ -3093,19 +3093,26 @@ function ghCanvasInkLeft(canvas, rect) {
   }
   const transparentBg = bg[3] < 12;
 
-  for (let y = startY; y < endY; y += stepY) {
-    let row = null;
+  // 逐行 getImageData 会触发 Chrome 的「Multiple readback operations…」警告，
+  // 而且每次读回都要同步 CPU。改成一次读回 8 行的条带，读回次数降到原来的 1/8。
+  const rowsPerChunk = 8;
+  for (let y = startY; y < endY; y += stepY * rowsPerChunk) {
+    const chunkH = Math.min(stepY * rowsPerChunk, endY - y);
+    let block = null;
     try {
-      row = ctx.getImageData(0, y, scanW, 1).data;
+      block = ctx.getImageData(0, y, scanW, chunkH).data;
     } catch (e) {
       return null;
     }
-    for (let x = 0; x < scanW; x++) {
-      const i = x * 4;
-      const isInk = transparentBg
-        ? row[i + 3] > 24
-        : Math.abs(row[i] - bg[0]) + Math.abs(row[i + 1] - bg[1]) + Math.abs(row[i + 2] - bg[2]) > 36;
-      if (isInk) return rect.left + x / scale;
+    for (let ry = 0; ry < chunkH; ry += stepY) {
+      const rowOffset = ry * scanW * 4;
+      for (let x = 0; x < scanW; x++) {
+        const i = rowOffset + x * 4;
+        const isInk = transparentBg
+          ? block[i + 3] > 24
+          : Math.abs(block[i] - bg[0]) + Math.abs(block[i + 1] - bg[1]) + Math.abs(block[i + 2] - bg[2]) > 36;
+        if (isInk) return rect.left + x / scale;
+      }
     }
   }
   return null;
@@ -3281,8 +3288,10 @@ function ghClickChapterNav(dir) {
   const clicked = new Set();
   const tryClick = (el, tag) => {
     if (!el || clicked.has(el)) return false;
+    // 命中的可能是 svg 图标（有 aria-label 但没有 click()），只能派发事件
+    if (typeof el.dispatchEvent !== 'function' || typeof el.getBoundingClientRect !== 'function') return false;
     clicked.add(el);
-    el.click();
+    ghDispatchClick(el);
     log('info', '已通过伪分页条翻章', { dir, tag });
     return true;
   };
