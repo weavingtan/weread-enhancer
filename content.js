@@ -2440,8 +2440,9 @@ let ghCatalogRefs = [];
 function ghActivateCatalogItem(el) {
   if (!el) return;
   const targets = [el];
-  const parent = el.parentElement;
-  if (parent && /item|li/i.test(`${parent.tagName} ${parent.className}`)) targets.push(parent);
+  // 真实结构：readerCatalog_list_item > _title > _title_text，点击处理器挂在最外层行上
+  const row = el.closest('[class*="list_item"], li');
+  if (row && row !== el) targets.push(row);
   targets.forEach((node) => {
     // 有些控件要先 hover / focus 才挂上处理器，按真实操作顺序补全事件
     ['mouseover', 'mouseenter', 'mousemove'].forEach((type) => {
@@ -2454,6 +2455,7 @@ function ghActivateCatalogItem(el) {
     } catch (e) { /* 不支持 PointerEvent 就只发鼠标事件 */ }
     try { node.focus?.({ preventScroll: true }); } catch (e) { /* 不可聚焦就跳过 */ }
     node.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    try { node.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true })); } catch (e) { /* 同上 */ }
     node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
     node.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     node.click();
@@ -2592,18 +2594,37 @@ async function ghHandleCatalogClick(node) {
   ghCopyDiagnostics(target);
 }
 
+// 把一个容器里的「看得见的叶子节点」列出来：类名 / 文字 / aria / 位置尺寸。
+// 目录入口不是 .readerControls_item（实测底栏 4 项只有书评/横排/字号/夜间），
+// 所以诊断要连容器里所有可见叶子一起 dump，才知道入口挂在哪。
+function ghDumpVisibleLeaves(scope, limit) {
+  if (!scope) return '(none)';
+  const rows = [];
+  for (const el of Array.from(scope.querySelectorAll('*'))) {
+    if (el.tagName.toLowerCase() === 'svg' || el.closest('svg')) continue;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) continue;
+    if (Array.from(el.children).some((child) => child.tagName.toLowerCase() !== 'svg')) continue; // 只看叶子
+    const label = el.getAttribute('aria-label') || el.getAttribute('title') || el.dataset?.id || '';
+    rows.push(`${el.tagName.toLowerCase()}.${String(el.className || '').trim()}｜${(el.textContent || '').trim().slice(0, 8)}｜${label}｜${Math.round(rect.x)},${Math.round(rect.y)} ${Math.round(rect.width)}x${Math.round(rect.height)}`);
+    if (rows.length >= limit) break;
+  }
+  return rows.join('\n') || '(empty)';
+}
+
 // 把目录项 / 目录按钮的真实结构复制到剪贴板，便于定位微信读书到底怎么绑定跳转
 function ghCopyDiagnostics(target) {
-  const controls = Array.from(document.querySelectorAll('.readerControls_item'))
-    .map((el) => `${el.className}｜${(el.textContent || '').trim().slice(0, 10)}｜${el.getAttribute('aria-label') || el.getAttribute('title') || ''}`)
-    .join('\n');
+  const controls = document.querySelector('.readerControls') || document.querySelector('[class*="readerControls"]');
+  const topbar = document.querySelector('.readerTopBar') || document.querySelector('[class*="readerTopBar"]');
   const catalogRoot = document.querySelector('.readerCatalog') || document.querySelector('[class*="catalog"]');
+  const catalogRect = catalogRoot?.getBoundingClientRect();
   const text = [
     `URL: ${location.href}`,
-    `item: ${target?.outerHTML?.slice(0, 900) || '(null)'}`,
-    `parent: ${target?.parentElement?.outerHTML?.slice(0, 400) || '(null)'}`,
-    `catalogRoot: ${catalogRoot?.className || '(none)'}`,
-    `controls:\n${controls}`,
+    `item: ${target?.outerHTML?.slice(0, 600) || '(null)'}`,
+    `parent: ${target?.parentElement?.outerHTML?.slice(0, 300) || '(null)'}`,
+    `catalogRoot: ${catalogRoot?.className || '(none)'}｜${catalogRect ? `${Math.round(catalogRect.width)}x${Math.round(catalogRect.height)}` : '-'}`,
+    `controls:\n${ghDumpVisibleLeaves(controls, 24)}`,
+    `topbar:\n${ghDumpVisibleLeaves(topbar, 24)}`,
   ].join('\n\n');
   log('info', '目录诊断', { text });
   try {
