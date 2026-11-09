@@ -85,6 +85,17 @@ function ghChapterFileName(text) {
   return /\.\w{1,5}$/.test(base) ? base : `${base}.md`;
 }
 
+// 目录行的 meta 里混着「当前读到 40%」「书签」。书签是可依赖的事实（用户自己加的），
+// 侧栏树用 ⭐ 标出来。检测时把「行文本 − 章节名」再匹配，避免章节名本身带「书签」二字误判。
+// 注：网页版没有可靠的「每章已读/未读」标记，所以不做置灰（猜错比不猜更糟）。
+function ghCatalogBookmarks(items) {
+  return items.map((el) => {
+    const row = el.closest?.('.readerCatalog_list_item') || el;
+    const rest = (row.textContent || '').replace((el.textContent || '').trim(), '');
+    return /书签/.test(rest);
+  });
+}
+
 // 当前章的唯一判据（顶栏没有章名，只能从目录拿）：先认 .selected 标签，
 // 再退回目录行上的高亮类。身份显示、j/k 翻章、目录高亮都走这里，避免两套顺序各自漂移。
 function ghCurrentChapterIndex(items) {
@@ -341,10 +352,12 @@ function ghRenderCatalogTree(force) {
     return;
   }
 
+  const bookmarks = ghCatalogBookmarks(items);
   tree.innerHTML = items.map((el, i) => profile.treeItemHtml({
     index: i,
     chapter: (el.textContent || '').trim(),
     active: i === activeIdx,
+    bookmarked: bookmarks[i],
   })).join('');
 
   // 渲染时把原始节点存下来：页面重渲染后索引会错位，引用也可能失效，

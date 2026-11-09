@@ -1494,6 +1494,21 @@ html[data-wre-skin="notion"] .wre-gh-avatar {
 .wre-nb-tree-item.wre-tree-row {
   cursor: pointer;
 }
+
+/* 书签章节的 ⭐（两套皮肤共用：真实数据来自目录行 meta 里的「书签」） */
+.wre-gh-tree-star,
+.wre-nb-tree-star {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: #d29922;
+}
+.wre-gh-tree-star .wre-gh-ico,
+.wre-nb-tree-star .wre-gh-ico {
+  width: 12px;
+  height: 12px;
+}
 .wre-nb-doc {
   width: 12px;
   height: 12px;

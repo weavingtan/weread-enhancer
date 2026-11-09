@@ -28,11 +28,12 @@ const WRE_SKINS = {
     chapterText: (label) => (label ? ghChapterFileName(label) : WRE_GH_FILE),
     title: (chapterText) => `${chapterText} at main · ${WRE_GH_OWNER}/${WRE_GH_REPO}`,
     favicon: WRE_GH_FAVICON,
-    treeItemHtml: ({ index, chapter, active }) => `
+    treeItemHtml: ({ index, chapter, active, bookmarked }) => `
    <div class="wre-gh-tree-item wre-tree-row${active ? ' wre-gh-tree-active' : ''}"
      data-catalog="${index}" data-chapter="${ghEscapeHtml(chapter)}">
      ${WRE_SVG.file}
      <span>${ghEscapeHtml(ghChapterFileName(chapter))}</span>
+     ${bookmarked ? `<span class="wre-gh-tree-star" title="书签">${WRE_SVG.star}</span>` : ''}
    </div>`,
   },
 
@@ -51,10 +52,11 @@ const WRE_SKINS = {
     chapterText: (label) => label || WRE_NB_PAGE,
     title: (chapterText) => `${chapterText} · ${WRE_NB_TEAM}`,
     favicon: WRE_NB_FAVICON,
-    treeItemHtml: ({ index, chapter, active }) => `
+    treeItemHtml: ({ index, chapter, active, bookmarked }) => `
     <div class="wre-nb-tree-item wre-tree-row${active ? ' wre-nb-tree-active' : ''}"
       style="padding-left:10px" data-catalog="${index}" data-chapter="${ghEscapeHtml(chapter)}">
       <span class="wre-nb-doc"></span><span>${ghEscapeHtml(chapter)}</span>
+      ${bookmarked ? `<span class="wre-nb-tree-star" title="书签">${WRE_SVG.star}</span>` : ''}
     </div>`,
   },
 };
