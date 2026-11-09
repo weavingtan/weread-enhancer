@@ -14,6 +14,25 @@ function ghDispatchPageKey(dir) {
   }));
 }
 
+// h / l：伪装态翻页。翻页模式（单栏/双栏 Canvas）派发 ← / → 原生翻页键；
+// 滚动模式没有「页」，退化成翻一整屏（留 15% 上下文，避免视觉断档）。
+function ghStepPage(dir) {
+  if (!WRE_STATE.disguise) return false;
+  const forward = dir > 0;
+  if (!detectScrollMode()) {
+    ghDispatchPageKey(dir);
+    log('info', '快捷键翻页', { dir, mode: 'page' });
+    return true;
+  }
+  const target = findScrollTarget();
+  const viewport = target === 'window' ? window.innerHeight
+    : (target instanceof Element ? target.clientHeight : 0);
+  const dy = Math.round(viewport * 0.85) * (forward ? 1 : -1);
+  scrollTargetBy(target, dy);
+  log('info', '快捷键翻页', { dir, mode: 'scroll', dy });
+  return true;
+}
+
 function ghClickChapterNav(dir) {
   const forward = dir > 0;
   const words = forward ? ['下一章', '下一节', '下一卷', '下一页'] : ['上一章', '上一节', '上一卷', '上一页'];

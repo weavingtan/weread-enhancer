@@ -327,6 +327,11 @@ function createUI() {
                 <td>启用</td>
               </tr>
               <tr>
+                <td><span class="wre-shortcut-key">H</span><span class="wre-shortcut-sep">/</span><span class="wre-shortcut-key">L</span></td>
+                <td>上一页 / 下一页（伪装态；滚动模式翻一屏）</td>
+                <td>启用</td>
+              </tr>
+              <tr>
                 <td><span class="wre-shortcut-key">I</span></td>
                 <td>进入 / 退出沉浸模式（隐藏顶部 / 右侧 / 底部，边缘唤出）</td>
                 <td>启用</td>
