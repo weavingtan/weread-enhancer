@@ -10,15 +10,14 @@ let ghOriginalFavicons = null;
 
 let ghLastChapterFile = '';
 
-// 标签页身份跟着当前章走：窗口标题 / file chip / Notion 面包屑三处必须是同一个文件名。
-// 常量那套（README.md）只在拿不到当前章时兜底。
+// 标签页身份跟着当前章走：窗口标题 / file chip / Notion 面包屑三处必须是同一个名字。
+// 具体拼法由皮肤注册表决定（github 用 .md 文件名，notion 用页面名）。
 function ghIdentityTarget() {
-  const label = ghCurrentChapterLabel();
-  const file = label ? ghChapterFileName(label) : '';
-  if (wreCurrentSkin() === 'notion') {
-    return { title: `${label || WRE_NB_PAGE} · ${WRE_NB_TEAM}`, favicon: WRE_NB_FAVICON };
-  }
-  return { title: `${file || WRE_GH_FILE} at main · ${WRE_GH_OWNER}/${WRE_GH_REPO}`, favicon: WRE_GH_FAVICON };
+  const profile = wreSkinProfile();
+  return {
+    title: profile.title(profile.chapterText(ghCurrentChapterLabel())),
+    favicon: profile.favicon,
+  };
 }
 
 function ghApplyPageIdentity() {
@@ -406,16 +405,17 @@ function ghSizeSignature() {
 // 「当前文件」三处同步：file chip、窗口标题、Notion 面包屑。
 // 只在章节真的变了时写 DOM —— 切章会连带一串同步调用，每次都写标题会让标签页闪。
 function ghSyncChapterIdentity() {
+  const profile = wreSkinProfile();
   const label = ghCurrentChapterLabel();
-  const file = label ? ghChapterFileName(label) : '';
-  const key = `${wreCurrentSkin()}|${label}`;
+  const chapterText = profile.chapterText(label);
+  const key = `${profile.id}|${chapterText}`;
   if (key === ghLastChapterFile) return;
   ghLastChapterFile = key;
 
-  const chip = document.querySelector('.wre-gh-file-chip-label');
-  if (chip && file) chip.textContent = file;
-  const nbCrumb = document.querySelector('.wre-nb-crumb');
-  if (nbCrumb) nbCrumb.textContent = label || WRE_NB_PAGE;
+  const chip = profile.chipSelector ? document.querySelector(profile.chipSelector) : null;
+  if (chip) chip.textContent = chapterText;
+  const crumb = profile.crumbSelector ? document.querySelector(profile.crumbSelector) : null;
+  if (crumb) crumb.textContent = chapterText;
   ghApplyPageIdentity();
 }
 

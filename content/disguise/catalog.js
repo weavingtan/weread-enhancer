@@ -103,9 +103,12 @@ let ghCatalogRenderItems = null;
 
 let ghCatalogRenderActive = -2;
 
+let ghCatalogRenderSkin = '';
+
 function ghResetCatalogRender() {
   ghCatalogRenderItems = null;
   ghCatalogRenderActive = -2;
+  ghCatalogRenderSkin = '';
 }
 
 let ghLastCatalogScan = 0;
@@ -293,38 +296,39 @@ async function ghJumpToCatalogEntry(node, label) {
 }
 
 function ghRenderCatalogTree(force) {
-  if (wreCurrentSkin() !== 'github') return;
+  const profile = wreSkinProfile();
+  const tree = document.querySelector(profile.treeSelector);
+  if (!tree) return;
+
   // 目录可能有几百章，正文滚动时观察器会频繁触发同步：1.5s 内不重复全量扫描
   const now = Date.now();
   if (!force && now - ghLastCatalogScan < 1500) return;
   ghLastCatalogScan = now;
 
-  const tree = document.querySelector('.wre-gh-tree');
-  if (!tree) return;
-
   const items = ghCollectCatalogItems();
   const activeIdx = ghCatalogActiveIndex(items);
   // 微信读书重渲染过目录（节点被换掉）时，缓存的引用全部失效 → 强制重铺一遍
   const refsStale = ghCatalogRefs.length > 0 && ghCatalogRefs.some((el) => !el.isConnected);
-  // items 是缓存数组：引用不变 + 当前章没变 ＝ 目录没动，直接跳过（不再 join 几百个章节名）
-  if (!force && !refsStale && items === ghCatalogRenderItems && activeIdx === ghCatalogRenderActive) return;
+  // items 是缓存数组：引用不变 + 当前章没变 + 皮肤没变 ＝ 目录没动，直接跳过
+  // （皮肤要进签名：两套皮肤的条目 DOM 结构不同，切皮肤必须重铺）
+  if (!force && !refsStale
+    && items === ghCatalogRenderItems
+    && activeIdx === ghCatalogRenderActive
+    && profile.id === ghCatalogRenderSkin) return;
   ghCatalogRenderItems = items;
   ghCatalogRenderActive = activeIdx;
+  ghCatalogRenderSkin = profile.id;
 
   if (items.length === 0) {
-    tree.innerHTML = ghFallbackTreeHtml();
+    tree.innerHTML = profile.fallbackTree();
     return;
   }
 
-  tree.innerHTML = items.map((el, i) => {
-    const chapter = (el.textContent || '').trim();
-    return `
-   <div class="wre-gh-tree-item${i === activeIdx ? ' wre-gh-tree-active' : ''}"
-     data-catalog="${i}" data-chapter="${ghEscapeHtml(chapter)}">
-     ${WRE_SVG.file}
-     <span>${ghEscapeHtml(ghChapterFileName(el.textContent))}</span>
-   </div>`;
-  }).join('');
+  tree.innerHTML = items.map((el, i) => profile.treeItemHtml({
+    index: i,
+    chapter: (el.textContent || '').trim(),
+    active: i === activeIdx,
+  })).join('');
 
   // 渲染时把原始节点存下来：页面重渲染后索引会错位，引用也可能失效，
   // 所以点击时还要按 data-chapter 的章节名兜底匹配。
@@ -420,7 +424,8 @@ function ghBindCatalogDelegation() {
   ghCatalogDelegationBound = true;
   document.addEventListener('click', (event) => {
     if (!document.documentElement.classList.contains('wre-disguise')) return;
-    const node = event.target?.closest?.('.wre-gh-tree-item[data-chapter]');
+    // 两套皮肤的目录行共用 .wre-tree-row 作为可点击标记
+    const node = event.target?.closest?.('.wre-tree-row[data-chapter]');
     if (node) {
       event.preventDefault();
       ghHandleCatalogClick(node);
@@ -507,7 +512,9 @@ function ghShellHtmlGithub() {
   `;
 }
 
-function ghShellHtmlNotion() {
+// Notion 皮肤的兜底树：目录还没采集到（书城页 / 阅读器刚起来）时用它撑住页面形状。
+// 采集到真目录后会被 ghRenderCatalogTree 整块替换成真实章节。
+function ghFallbackNotionTreeHtml() {
   const pages = [
     { name: '产品空间', depth: 0, type: 'space' },
     { name: WRE_NB_PAGE, depth: 1, type: 'doc', active: true },
@@ -519,6 +526,14 @@ function ghShellHtmlNotion() {
     { name: '线上问题跟踪', depth: 1, type: 'doc' },
     { name: '技术方案', depth: 1, type: 'doc' },
   ];
+  return pages.map((item) => `
+          <div class="wre-nb-tree-item${item.active ? ' wre-nb-tree-active' : ''}${item.type === 'space' ? ' wre-nb-tree-space' : ''}"
+            style="padding-left:${10 + item.depth * 14}px">
+            <span class="wre-nb-doc"></span><span>${item.name}</span>
+          </div>`).join('');
+}
+
+function ghShellHtmlNotion() {
   return `
     <div class="wre-nb-topbar">
       <div class="wre-nb-topbar-inner">
@@ -545,11 +560,7 @@ function ghShellHtmlNotion() {
       </div>
       <div class="wre-nb-search">${WRE_SVG.search}<span>Search</span></div>
       <div class="wre-nb-tree">
-        ${pages.map((item) => `
-          <div class="wre-nb-tree-item${item.active ? ' wre-nb-tree-active' : ''}${item.type === 'space' ? ' wre-nb-tree-space' : ''}"
-            style="padding-left:${10 + item.depth * 14}px">
-            <span class="wre-nb-doc"></span><span>${item.name}</span>
-          </div>`).join('')}
+        ${ghFallbackNotionTreeHtml()}
       </div>
     </aside>
 
@@ -596,7 +607,8 @@ function ghBindShell(shell) {
 }
 
 function ghEnsureShell(force) {
-  const skin = wreCurrentSkin();
+  const profile = wreSkinProfile();
+  const skin = profile.id;
   const existing = document.getElementById('wre-gh-shell');
   if (existing && !force && existing.dataset.skin === skin) return existing;
   if (existing) existing.remove();
@@ -604,7 +616,7 @@ function ghEnsureShell(force) {
   const shell = document.createElement('div');
   shell.id = 'wre-gh-shell';
   shell.dataset.skin = skin;
-  shell.innerHTML = skin === 'notion' ? ghShellHtmlNotion() : ghShellHtmlGithub();
+  shell.innerHTML = profile.shellHtml();
   document.body.appendChild(shell);
   document.documentElement.dataset.wreSkin = skin;
   ghBindShell(shell);

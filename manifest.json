@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extensionName__",
-  "version": "0.41.1",
+  "version": "0.42.0",
   "description": "__MSG_extensionDescription__",
   "default_locale": "zh_CN",
   "action": {
@@ -41,6 +41,7 @@
         "content/disguise/shell.js",
         "content/disguise/catalog.js",
         "content/disguise/finder.js",
+        "content/disguise/skins.js",
         "content/disguise/chrome.js",
         "content/disguise/pager.js",
         "content/disguise/lifecycle.js",

@@ -1393,6 +1393,10 @@ html[data-wre-skin="notion"] .wre-gh-avatar {
   background: var(--wre-gh-hover-bg);
   font-weight: 500;
 }
+/* 目录行可点（兜底的假页面不是 .wre-tree-row，保持 default 光标） */
+.wre-nb-tree-item.wre-tree-row {
+  cursor: pointer;
+}
 .wre-nb-doc {
   width: 12px;
   height: 12px;

@@ -225,8 +225,7 @@ function createUI() {
             <label class="wre-setting-label">🎭 伪装皮肤</label>
             <div class="wre-setting-control">
               <div class="wre-theme-toggle" id="wre-skin-toggle">
-                <button class="wre-btn wre-btn-small" data-skin="github">GitHub</button>
-                <button class="wre-btn wre-btn-small" data-skin="notion">Notion</button>
+                ${wreSkinList().map((skin) => `<button class="wre-btn wre-btn-small" data-skin="${skin.id}">${skin.label}</button>`).join('')}
               </div>
             </div>
             <div class="wre-setting-tip">GitHub = 代码仓库页；Notion = 团队文档页。切换后标题、图标与侧栏一起更换。</div>
