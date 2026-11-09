@@ -331,6 +331,60 @@ let ghModeReflowTrailing = null;
 
 let ghTopbarH = '';
 
+/* 布局观察：原来靠 1 秒轮询（每秒一次 getBoundingClientRect = 每秒一次强制布局）
+ * 来发现「窗口尺寸变了 / 双栏 canvas 出现了」。这两件事本来就是可观察事件，
+ * 改成 ResizeObserver；回调只调幂等的 ghSyncChrome（内部有状态 + 尺寸签名去重）。
+ * canvas 从无到有这件事留给 lifecycle 里的低频探针兜底（见 ghStartCanvasProbe）。 */
+let ghLayoutObserver = null;
+
+const ghLayoutTargets = new Set();
+
+let ghLayoutRaf = null;
+
+function ghObserveLayoutTarget(el) {
+  if (!el || ghLayoutTargets.has(el)) return;
+  ghLayoutObserver.observe(el);
+  ghLayoutTargets.add(el);
+}
+
+function ghEnsureLayoutObservers() {
+  if (typeof ResizeObserver !== 'function') return false; // 旧内核 / jsdom：退回事件路径
+  if (!ghLayoutObserver) ghLayoutObserver = new ResizeObserver(ghOnLayoutResize);
+
+  // 微信读书重建过节点：先把已断开的移出观察集合，避免集合无限增长
+  ghLayoutTargets.forEach((el) => {
+    if (el.isConnected) return;
+    ghLayoutObserver.unobserve(el);
+    ghLayoutTargets.delete(el);
+  });
+
+  ghObserveLayoutTarget(document.documentElement);
+  ghObserveLayoutTarget(document.querySelector('.wr_canvasContainer canvas'));
+  ghObserveLayoutTarget(document.querySelector('.readerChapterContent'));
+  ghObserveLayoutTarget(document.querySelector('.app_content'));
+  return ghLayoutTargets.size > 0;
+}
+
+function ghOnLayoutResize() {
+  if (ghLayoutRaf) return;
+  ghLayoutRaf = requestAnimationFrame(() => {
+    ghLayoutRaf = null;
+    if (!WRE_STATE.disguise) return;
+    ghSyncChrome();
+  });
+}
+
+function ghStopLayoutObservers() {
+  if (ghLayoutRaf) {
+    cancelAnimationFrame(ghLayoutRaf);
+    ghLayoutRaf = null;
+  }
+  if (!ghLayoutObserver) return;
+  ghLayoutObserver.disconnect();
+  ghLayoutTargets.clear();
+  ghLayoutObserver = null;
+}
+
 function ghSizeSignature() {
   const canvas = document.querySelector('.wr_canvasContainer canvas');
   const c = canvas ? `${canvas.width}x${canvas.height}` : 'none';
@@ -340,6 +394,8 @@ function ghSizeSignature() {
 }
 
 function ghSyncChromeInner(force) {
+  // 顺带把观察目标补上：正文 / canvas 被重建时，下一次任意同步就能恢复观察
+  ghEnsureLayoutObservers();
   const nativeBar = document.querySelector('.readerTopBar');
   const barHeight = nativeBar?.getBoundingClientRect?.().height;
   if (barHeight && barHeight > 20) {

@@ -20,34 +20,29 @@ let ghObserverTimer = null;
 
 let ghBodyObserver = null;
 
-let ghModeTick = null;
+// canvas 从无到有（滚动 → 双栏）时不一定伴随被观察元素的尺寸变化，用低频探针兜底：
+// 只做一次 querySelector（不量 rect、不读 Range），一旦观察到 canvas 就停表。
+let ghCanvasProbe = null;
 
-let ghLastDoubleFlag = null;
-
-function ghStartModeTick() {
-  if (ghModeTick) return;
-  ghLastDoubleFlag = null;
-  ghModeTick = setInterval(() => {
-    if (!WRE_STATE.disguise) return;
-    const isDouble = ghIsDoubleColumn();
-    if (isDouble !== ghLastDoubleFlag) {
-      ghLastDoubleFlag = isDouble;
-      ghSyncChrome();
+function ghStartCanvasProbe() {
+  if (ghCanvasProbe || typeof ResizeObserver !== 'function') return;
+  ghCanvasProbe = setInterval(() => {
+    if (!WRE_STATE.disguise) {
+      ghStopCanvasProbe();
       return;
     }
-    // 每秒量一次留白 = 每秒一次强制布局。只有窗口/canvas 尺寸变了才量。
-    const sizeSig = ghSizeSignature();
-    if (sizeSig === ghLastSizeSig) return;
-    ghLastSizeSig = sizeSig;
-    ghSyncSidebarFits();
-  }, 1000);
+    const canvas = document.querySelector('.wr_canvasContainer canvas');
+    if (!canvas) return;
+    ghEnsureLayoutObservers();
+    ghSyncChrome();
+    if (ghLayoutTargets.has(canvas)) ghStopCanvasProbe();
+  }, 2000);
 }
 
-function ghStopModeTick() {
-  if (!ghModeTick) return;
-  clearInterval(ghModeTick);
-  ghModeTick = null;
-  ghLastDoubleFlag = null;
+function ghStopCanvasProbe() {
+  if (!ghCanvasProbe) return;
+  clearInterval(ghCanvasProbe);
+  ghCanvasProbe = null;
 }
 
 function ghSetActive(on) {
@@ -104,10 +99,12 @@ function ghSetActive(on) {
         }, 500);
       }
     }
-    ghStartModeTick();
+    ghEnsureLayoutObservers();
+    ghStartCanvasProbe();
     log('info', '伪装已开启', { doubleColumn: ghIsDoubleColumn() });
   } else {
-    ghStopModeTick();
+    ghStopCanvasProbe();
+    ghStopLayoutObservers();
     document.documentElement.classList.remove('wre-disguise');
     document.documentElement.classList.remove('wre-gh-dark');
     document.documentElement.classList.remove('wre-double-column');
