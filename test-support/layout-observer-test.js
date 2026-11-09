@@ -76,7 +76,8 @@ window.eval(code);
 const results = [];
 const check = (name, ok, extra) => results.push(`${ok ? 'PASS' : 'FAIL'} ${name}${extra ? ' — ' + extra : ''}`);
 
-setTimeout(() => {
+setTimeout(async () => {
+  const tick = (ms) => new Promise((r) => setTimeout(r, ms));
   const ro = roInstances[0];
   check('创建了 ResizeObserver', roInstances.length === 1, `count=${roInstances.length}`);
   check('观察目标 ≥ 3（html / 正文 / app_content）', !!ro && ro.targets.size >= 3, `targets=${ro && ro.targets.size}`);
@@ -102,6 +103,15 @@ setTimeout(() => {
   // 关伪装 → 观察器断开
   window.eval('ghToggle()');
   check('退出伪装后观察器断开', ro.disconnected === true, `disconnected=${ro.disconnected}`);
+
+  // 关伪装时待执行的延迟任务要取消：否则按 G 之后页面还会补一次 reflow（又闪一下）
+  let resizes = 0;
+  window.addEventListener('resize', () => { resizes += 1; });
+  window.eval('ghToggle()'); // 重新开启
+  window.eval('scheduleWereadLayoutReflow("test-scheduled")');
+  window.eval('ghToggle()'); // 关闭 → wreClearTimers
+  await tick(80);
+  check('退出伪装取消待执行的重排', resizes === 0, `resize 次数=${resizes}`);
 
   if (errors.length) {
     console.log('运行期错误:');

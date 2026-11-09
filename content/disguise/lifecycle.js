@@ -33,8 +33,9 @@ function ghStartCanvasProbe() {
     }
     const canvas = document.querySelector('.wr_canvasContainer canvas');
     if (!canvas) return;
+    // 只做「挂上观察器」：ResizeObserver 对每个新目标都会立即回调一次，
+    // 同步由那条回调（去抖后）完成 —— 探针自己不再测量，也不再读 rect。
     ghEnsureLayoutObservers();
-    ghSyncChrome();
     if (ghLayoutTargets.has(canvas)) ghStopCanvasProbe();
   }, 2000);
 }
@@ -58,7 +59,7 @@ function ghSetActive(on) {
     // 多派一次 resize 就是多一次整块闪（用户感知为「又刷新了一次」）。
     if (!detectScrollMode()) scheduleWereadLayoutReflow('gh-disguise-on');
     // 阅读器 DOM 可能晚于 content script 就绪：延后补一次屏占比 + 侧栏测量。
-    setTimeout(() => {
+    wreSetTimeout(() => {
       applyScreenRatio(WRE_STATE.screenRatio);
       // 屏占比 100% = 没改正文宽度，不需要让微信读书再分页一次
       if (WRE_STATE.screenRatio !== 100 && !detectScrollMode()) {
@@ -82,6 +83,8 @@ function ghSetActive(on) {
         const target = document.querySelector('.readerContent');
         if (!target) return false;
         ghObserver = new MutationObserver(() => {
+          // 正文被重建时观察目标会失效：先补挂，再去抖同步（顺序反了会漏一帧尺寸）
+          if (WRE_STATE.disguise) ghEnsureLayoutObservers();
           if (ghObserverTimer) clearTimeout(ghObserverTimer);
           ghObserverTimer = setTimeout(() => {
             if (!WRE_STATE.disguise) return;
@@ -107,6 +110,10 @@ function ghSetActive(on) {
     ghStopCanvasProbe();
     ghStopLayoutObservers();
     ghCloseFinder();
+    // 关伪装时取消所有待执行的延迟任务：否则按 G 之后还会补一次 reflow / 屏占比，
+    // 表现就是「已经退出了，页面又闪一下」。
+    wreClearTimers();
+    ghModeReflowTrailing = null;
     document.documentElement.classList.remove('wre-gh-filebar-ok');
     ghFilebarFitKey = '';
     document.documentElement.classList.remove('wre-disguise');

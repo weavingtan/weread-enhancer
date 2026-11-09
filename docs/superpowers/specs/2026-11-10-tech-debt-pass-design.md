@@ -31,8 +31,11 @@ v0.39.x 一路在修「同步漏了一次 / resize 多派了一次 / 观察器�
 
 - **伪装视图**：单按钮切换（`#wre-disguise-toggle`），文案
   「伪装已开启 · 点击退出」/「伪装已关闭 · 点击进入」。
-- **伪装皮肤**：GitHub / Notion 分段按钮（`#wre-skin-toggle`，复用 `.wre-theme-toggle`
-  + `.wre-btn-small` + `.wre-theme-active` 选中态样式，不新增 CSS 类）。
+- **伪装皮肤**：GitHub / Notion 分段按钮（`#wre-skin-toggle`，按钮列表由皮肤注册表
+  `wreSkinList()` 生成；容器与选中态复用 `.wre-theme-toggle` + `.wre-btn-small` +
+  `.wre-theme-active`）。
+  实现时新增了一个 `.wre-btn.wre-toggle-on` 用于伪装开关的开启态：复用
+  `.wre-immersive-active` 会让「沉浸模式激活」这个语义漂到伪装开关上，改名比省一个类更值。
 
 两项都走 `WRE_STATE` + `saveState()`，与 popup 双向同步。
 
@@ -71,26 +74,35 @@ function log(level, message, meta) {
 1. 新增 `ghEnsureLayoutObservers()`：一个 `ResizeObserver` 观察
    `documentElement` / `.wr_canvasContainer canvas` / `.readerChapterContent` / `.app_content`
    中当前存在的元素（用 Set 记录已观察对象，节点重建后补观察、旧节点出列）。
-2. 回调 rAF 合并后调 `ghSyncChrome()` —— 它内部已有状态签名与尺寸签名去重，天然幂等。
+2. 回调**去抖 160ms** 后调 `ghSyncChrome()` —— 它内部已有状态签名与尺寸签名去重，天然幂等。
+   最初写的是「rAF 合并」（约 16ms），真机推演后改成 160ms：微信读书重建 canvas 是
+   「先移除、再插入」，逐帧同步会把模式签名算成 `双栏 → 单栏 → 双栏`，白派两次 resize
+   （正文整块闪）。去抖保证读到的是稳定态。
 3. 每次 `ghSyncChromeInner` 开头调一次 `ghEnsureLayoutObservers()`：节点被微信读书重建时，
    下一次任意同步就能补上观察。
 4. 删除 `ghStartModeTick` / `ghStopModeTick` / `ghModeTick` / `ghLastDoubleFlag`。
 5. `ResizeObserver` 不存在（旧内核 / jsdom）时直接跳过，退化为原有的事件路径
    （`resize` 监听 + MutationObserver 已在）。
 
+关于重入锁 `ghSyncing`：它只丢弃**同步代码内部**的重入调用。定时器回调不可能与同步代码
+交错（JS 单线程），所以去抖后的那次同步不会被锁吞掉。
+
 ### 兜底（防「尺寸没变但没有观察目标」）
 
-`.readerContent` 的 MutationObserver 回调里补一次 `ghEnsureLayoutObservers()`（幂等）；
-另保留一个 **2 秒低频挂载 tick**，只在「还没观察到 canvas」时运行、只做
+`.readerContent` 的 MutationObserver 回调里先补一次 `ghEnsureLayoutObservers()`（幂等），
+再去抖同步；另保留一个 **2 秒低频挂载 tick**，只在「还没观察到 canvas」时运行、只做
 `document.querySelector('.wr_canvasContainer canvas')` 判断（不量 rect、不读 Range），
-观察到 canvas 后立即停表。这样「切双栏 → canvas 出现」即使没有触发任何尺寸变化，
+观察到 canvas 后立即停表。挂载本身会触发 `ResizeObserver` 的首次回调，同步由那条回调完成 ——
+探针自己不做任何测量。这样「切双栏 → canvas 出现」即使没有触发任何尺寸变化，
 最迟 2 秒内也能被发现，而不再有每秒一次的强制布局。
 
 ## 五、不变量
 
 - 不新增权限、不引入联网、不搬动微信读书 DOM 节点。
 - 不改变伪装视觉与阅读体验；面板新增两项沿用现有样式 token。
-- 关闭伪装（G）时观察器与 tick 一并停掉，不留后台开销。
+- 关闭伪装（G）时观察器、tick 与所有延迟任务一并停掉，不留后台开销
+  （延迟任务统一走 `wreSetTimeout` 并登记，`wreClearTimers()` 一次清空 —— 否则退出伪装后
+  还会补一次 reflow，表现就是「按了 G 页面又闪一下」）。
 
 ## 六、验收
 
@@ -110,3 +122,17 @@ function log(level, message, meta) {
 | 3 | v0.39.24 | `perf: ResizeObserver 替掉 1s 布局轮询（保留 canvas 缺失时 2s 挂载兜底）` |
 
 最后一并 `python3 pack.py`。
+
+## 八、追加：重载探针的口径（v0.41.1，原 spec 未覆盖）
+
+真机上出现过一条 `检测到 5 秒内页面被重复加载 {navType:"reload", gapMs:4498}`。核查结论：
+插件里没有任何 `location.reload()` / 跳转，`navType:"reload"` 是浏览器级的整页重载，
+来源只可能是微信读书自己刷新，或开发时手动刷新。
+
+因此把探针从「5 秒内任意一次就报警」改成能定责的版本（本次改动超出原 spec 范围，补记于此处）：
+
+- 只在 **15 秒内 ≥3 次** 或 **间隔 <1.5 秒** 时报警 —— 单次手刷（开发时 Cmd+R）不再刷屏。
+- 报警 meta 带 `count` / `gapMs` / `navType` / **`reflowSincePrevBoot`**：后者是「自上次重载以来
+  插件派发了几次 resize」，跨 reload 由 sessionStorage 承接。`>0` 才值得怀疑插件，`=0` 说明是
+  微信读书自己刷的页面。
+- 配套：布局观察器加 160ms 去抖（见 §四.2），避免 canvas 重建时白派两次 resize。

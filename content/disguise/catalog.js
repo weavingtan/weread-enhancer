@@ -85,9 +85,22 @@ function ghChapterFileName(text) {
   return /\.\w{1,5}$/.test(base) ? base : `${base}.md`;
 }
 
-// 当前章 = 目录里的高亮项（顶栏没有章名，只能从目录拿）。
+// 当前章的唯一判据（顶栏没有章名，只能从目录拿）：先认 .selected 标签，
+// 再退回目录行上的高亮类。身份显示、j/k 翻章、目录高亮都走这里，避免两套顺序各自漂移。
+function ghCurrentChapterIndex(items) {
+  const list = items || ghCollectCatalogItems();
+  const selected = ghCatalogSelectedLabel();
+  if (selected) {
+    const hit = list.findIndex((el) => (el.textContent || '').trim() === selected);
+    if (hit >= 0) return hit;
+  }
+  return ghCatalogActiveIndex(list);
+}
+
 // 目录还没渲染过就返回空串，调用方退回 README.md ——「当前文件」在各处必须一致，
 // 否则侧栏高亮第十二章、窗口标题还写着 README.md，一眼就穿帮。
+// 这里刻意不依赖「目录至少 3 项」的采集门槛（ghCollectCatalogItems 的门槛用于避免
+// 把普通列表误认成目录）：单章 / 两章的短篇也要能显示正确的文件名。
 function ghCurrentChapterLabel() {
   const selected = ghCatalogSelectedLabel();
   if (selected) return selected;
@@ -300,21 +313,25 @@ function ghRenderCatalogTree(force) {
   const tree = document.querySelector(profile.treeSelector);
   if (!tree) return;
 
-  // 目录可能有几百章，正文滚动时观察器会频繁触发同步：1.5s 内不重复全量扫描
-  const now = Date.now();
-  if (!force && now - ghLastCatalogScan < 1500) return;
-  ghLastCatalogScan = now;
-
   const items = ghCollectCatalogItems();
-  const activeIdx = ghCatalogActiveIndex(items);
+  const activeIdx = ghCurrentChapterIndex(items); // 与窗口标题 / file chip 同一判据
   // 微信读书重渲染过目录（节点被换掉）时，缓存的引用全部失效 → 强制重铺一遍
   const refsStale = ghCatalogRefs.length > 0 && ghCatalogRefs.some((el) => !el.isConnected);
+  const skinChanged = profile.id !== ghCatalogRenderSkin;
   // items 是缓存数组：引用不变 + 当前章没变 + 皮肤没变 ＝ 目录没动，直接跳过
   // （皮肤要进签名：两套皮肤的条目 DOM 结构不同，切皮肤必须重铺）
-  if (!force && !refsStale
+  if (!force && !refsStale && !skinChanged
     && items === ghCatalogRenderItems
+    && activeIdx === ghCatalogRenderActive) return;
+
+  // 目录内容可能在频繁抖动（目录面板滚动）：1.5s 内不重复全量重铺几百行。
+  // 但「当前章变了」和「切了皮肤」必须立刻生效 —— 以前节流排在最前面，
+  // 导致点完目录后侧栏高亮要等最多 1.5s 才跟上。
+  const now = Date.now();
+  if (!force && !refsStale && !skinChanged
     && activeIdx === ghCatalogRenderActive
-    && profile.id === ghCatalogRenderSkin) return;
+    && now - ghLastCatalogScan < 1500) return;
+  ghLastCatalogScan = now;
   ghCatalogRenderItems = items;
   ghCatalogRenderActive = activeIdx;
   ghCatalogRenderSkin = profile.id;
@@ -339,19 +356,29 @@ function ghRenderCatalogTree(force) {
 
 let ghCatalogDelegationBound = false;
 
-async function ghHandleCatalogClick(node) {
-  const idx = Number(node.dataset.catalog);
-  const chapter = node.dataset.chapter || '';
-  const target = ghFindCatalogItem(idx, chapter);
+// 侧栏点击 / 章节查找器 / j k 翻章，都是「定位目录节点 → 跳章 → 失败提示」，
+// 差别只在来源文案与要不要复制诊断。统一在这里，省得三份各自演化出不同行为。
+async function ghJumpChapter(chapter, options = {}) {
+  const label = String(chapter || '').trim();
+  const target = ghFindCatalogItem(Number(options.index), label);
   if (!target) {
-    ghToast(`目录里找不到「${chapter.slice(0, 12)}」`);
-    return;
+    ghToast(`目录里找不到「${label.slice(0, 12)}」`);
+    return { ok: false, report: ['node-missing'] };
   }
-  log('info', '侧栏目录跳章', { idx, chapter });
-  const result = await ghJumpToCatalogEntry(target, chapter);
-  if (result.ok) return;
-  ghToast(`跳章失败：${result.report.join(' · ')}（诊断已复制）`);
-  ghCopyDiagnostics(target, result.report);
+  log('info', `${options.source || '目录'}跳章`, { chapter: label });
+  const result = await ghJumpToCatalogEntry(target, label);
+  if (result.ok) return result;
+  ghToast(`跳章失败：${result.report.join(' · ')}${options.diagnostics ? '（诊断已复制）' : ''}`);
+  if (options.diagnostics) ghCopyDiagnostics(target, result.report);
+  return result;
+}
+
+async function ghHandleCatalogClick(node) {
+  await ghJumpChapter(node.dataset.chapter || '', {
+    index: node.dataset.catalog,
+    source: '侧栏目录',
+    diagnostics: true,
+  });
 }
 
 function ghDumpVisibleLeaves(scope, limit) {

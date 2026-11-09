@@ -11,6 +11,17 @@
   --wre-icon-bg: #ffffff;
   --wre-border-radius: 8px;
   --wre-z-index: 999999;
+
+  /* 伪装骨架的层级（唯一来源）：以前这组 21474829xx 魔法数散在十来个选择器里，
+     改一层要满文件找。顺序：侧栏 < 仓库条/文件头 < 顶栏 < 分页条 < Toast
+     < 查找器 < 插件自己的设置面板。 */
+  --wre-z-sidebar: 2147482998;
+  --wre-z-bar: 2147482999;
+  --wre-z-topbar: 2147483000;
+  --wre-z-pager: 2147483001;
+  --wre-z-toast: 2147483003;
+  --wre-z-finder: 2147483050;
+  --wre-z-panel: 2147483100;
 }
 
 /* 外观主题档（B 档）：深色只覆盖与浅色不同的值，其余沿用上方默认。
@@ -634,7 +645,7 @@ html.wre-disguise #we-read-enhancer-root .wre-fab {
 /* 伪装骨架的层级在 21474829xx，设置面板（从顶栏头像打开）必须抬到它上面，
    否则弹层会被假顶栏 / 假侧栏盖住一半 */
 html.wre-disguise #we-read-enhancer-root {
-  z-index: 2147483100;
+  z-index: var(--wre-z-panel);
 }
 html.wre-disguise body {
   background: var(--wre-gh-page-bg) !important;
@@ -711,7 +722,7 @@ html.wre-disguise #wre-gh-shell {
   right: 0;
   height: var(--wre-gh-topbar-h);
   background: #24292f;
-  z-index: 2147483000;
+  z-index: var(--wre-z-topbar);
   user-select: none;
 }
 .wre-gh-topbar-inner {
@@ -789,7 +800,7 @@ html.wre-disguise #wre-gh-shell {
   height: var(--wre-gh-repobar-h);
   background: var(--wre-gh-page-bg);
   border-bottom: 1px solid var(--wre-gh-border);
-  z-index: 2147482999;
+  z-index: var(--wre-z-bar);
   user-select: none;
 }
 .wre-gh-repobar-inner {
@@ -885,8 +896,8 @@ html.wre-disguise #wre-gh-shell {
   left: 32px;
   right: 32px;
   bottom: 24px;
-  /* 必须高于左侧文件树（2147482998），否则 Previous 会被侧栏整块盖住 */
-  z-index: 2147483001;
+  /* 必须高于左侧文件树，否则 Previous 会被侧栏整块盖住 */
+  z-index: var(--wre-z-pager);
   justify-content: space-between;
   pointer-events: none;
   user-select: none;
@@ -915,8 +926,8 @@ html.wre-disguise .wre-gh-pager.wre-pager-visible {
   display: none;
   position: fixed;
   inset: 0;
-  /* 高于骨架与 Toast，低于插件自己的设置面板（2147483100） */
-  z-index: 2147483200;
+  /* 高于骨架与 Toast，但**低于**插件自己的设置面板：用户正开着设置时按 / 不能把它盖住 */
+  z-index: var(--wre-z-finder);
   background: rgba(27, 31, 36, 0.45);
   align-items: flex-start;
   justify-content: center;
@@ -1023,7 +1034,7 @@ html.wre-disguise .wre-gh-pager.wre-pager-visible {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s ease, transform 0.25s ease;
-  z-index: 2147483003;
+  z-index: var(--wre-z-toast);
 }
 #wre-gh-toast.wre-visible {
   opacity: 1;
@@ -1066,7 +1077,7 @@ html.wre-disguise.wre-gh-sidebar-ok .wre-gh-sidebar {
   height: var(--wre-gh-filebar-h);
   background: var(--wre-gh-page-bg);
   border-bottom: 1px solid var(--wre-gh-border);
-  z-index: 2147482999;
+  z-index: var(--wre-z-bar);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", "PingFang SC", sans-serif;
 }
 
@@ -1149,7 +1160,7 @@ html.wre-gh-filebar-ok .wre-gh-sidebar {
   background: var(--wre-gh-page-bg);
   border-right: 1px solid var(--wre-gh-border);
   overflow-y: auto;
-  z-index: 2147482998;
+  z-index: var(--wre-z-sidebar);
   user-select: none;
 }
 
@@ -1347,7 +1358,7 @@ html[data-wre-skin="notion"].wre-gh-dark {
   height: var(--wre-gh-topbar-h);
   background: var(--wre-gh-page-bg);
   border-bottom: 1px solid var(--wre-gh-border);
-  z-index: 2147483000;
+  z-index: var(--wre-z-topbar);
   user-select: none;
 }
 .wre-nb-topbar-inner {

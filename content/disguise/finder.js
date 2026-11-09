@@ -15,10 +15,19 @@ let ghFinderIndex = 0;
 
 let ghFinderGlobalBound = false;
 
+let ghFinderCacheItems = null;
+
+let ghFinderCacheSource = [];
+
+// 几百个章节的映射只做一次：目录数组引用不变就复用（每敲一个键全量 map 没必要）
 function ghFinderSource() {
-  return ghCollectCatalogItems()
+  const items = ghCollectCatalogItems();
+  if (items === ghFinderCacheItems) return ghFinderCacheSource;
+  ghFinderCacheItems = items;
+  ghFinderCacheSource = items
     .map((el, i) => ({ el, i, text: (el.textContent || '').trim() }))
     .filter((item) => item.text);
+  return ghFinderCacheSource;
 }
 
 // 包含匹配优先（「第三章」直接命中），再补子序列匹配（「第3章」这种跳字），
@@ -85,16 +94,8 @@ function ghMoveFinderIndex(delta) {
 
 async function ghOpenFinderChapter(item) {
   if (!item) return;
-  const label = item.text;
   ghCloseFinder();
-  const target = ghFindCatalogItem(item.i, label);
-  if (!target) {
-    ghToast(`目录里找不到「${label.slice(0, 12)}」`);
-    return;
-  }
-  log('info', '查找器跳章', { chapter: label });
-  const result = await ghJumpToCatalogEntry(target, label);
-  if (!result.ok) ghToast(`跳章失败：${result.report.join(' · ')}`);
+  await ghJumpChapter(item.text, { index: item.i, source: '查找器' });
 }
 
 function ghActivateFinderIndex() {
@@ -208,11 +209,7 @@ async function ghStepChapter(dir) {
     ghToast('目录还没加载好，稍后再试');
     return false;
   }
-  let idx = ghCatalogActiveIndex(items);
-  if (idx < 0) {
-    const selected = ghCatalogSelectedLabel();
-    idx = selected ? items.findIndex((el) => (el.textContent || '').trim() === selected) : -1;
-  }
+  const idx = ghCurrentChapterIndex(items); // 与侧栏高亮、窗口标题同一判据
   if (idx < 0) {
     ghToast('定位不到当前章节，可先按 / 搜索');
     return false;
@@ -222,10 +219,7 @@ async function ghStepChapter(dir) {
     ghToast(dir < 0 ? '已经是第一章' : '已经是最后一章');
     return false;
   }
-  const node = items[target];
-  const label = (node.textContent || '').trim();
-  log('info', 'j/k 翻章', { dir, chapter: label });
-  const result = await ghJumpToCatalogEntry(node, label);
-  if (!result.ok) ghToast(`跳章失败：${result.report.join(' · ')}`);
+  const label = (items[target].textContent || '').trim();
+  const result = await ghJumpChapter(label, { index: target, source: 'j/k 翻章' });
   return result.ok;
 }

@@ -6,7 +6,10 @@
  *   - 两套皮肤走同一条目录 / 跳章 / 身份链路，能力对等；
  *   - 加第三套（GitLab / Confluence / 内部工单系统）只需要在这里加一项。
  *
- * 注意：本文件必须排在 catalog.js 之后 —— 它引用了那里的骨架与兜底树构造函数。
+ * 加载顺序契约（全局作用域共享的代价）：
+ *   - 本文件必须排在 catalog.js 之后 —— 它引用了那里的骨架与兜底树构造函数；
+ *   - `ghLastChapterFile` / `ghFilebarFitKey` 这两个会被 catalog.js 提前写入的状态，
+ *     声明放在最早加载的 shell.js，避免顺序变动后踩 TDZ。
  */
 
 const WRE_SKINS = {
@@ -16,9 +19,11 @@ const WRE_SKINS = {
     shellHtml: () => ghShellHtmlGithub(),
     fallbackTree: () => ghFallbackTreeHtml(),
     treeSelector: '.wre-gh-tree',
-    // 「当前文件」在界面上的落点：GitHub 是仓库条右侧的文件 chip
+    // 「当前文件」在界面上的落点：GitHub 是仓库条右侧的文件 chip + 文件头
     chipSelector: '.wre-gh-file-chip-label',
     crumbSelector: null,
+    filebarNameSelector: '.wre-gh-filebar-name',
+    filebarMetaSelector: '.wre-gh-filebar-meta',
     // 章的文本 → 显示名（GitHub 用 .md 文件名）
     chapterText: (label) => (label ? ghChapterFileName(label) : WRE_GH_FILE),
     title: (chapterText) => `${chapterText} at main · ${WRE_GH_OWNER}/${WRE_GH_REPO}`,
@@ -37,9 +42,11 @@ const WRE_SKINS = {
     shellHtml: () => ghShellHtmlNotion(),
     fallbackTree: () => ghFallbackNotionTreeHtml(),
     treeSelector: '.wre-nb-tree',
-    // Notion 首页没有文件 chip，当前页名落在面包屑最后一段
+    // Notion 首页没有文件 chip，当前页名落在面包屑最后一段；也没有文件头那一行
     chipSelector: null,
     crumbSelector: '.wre-nb-crumb',
+    filebarNameSelector: null,
+    filebarMetaSelector: null,
     // Notion 的页面名不带扩展名
     chapterText: (label) => label || WRE_NB_PAGE,
     title: (chapterText) => `${chapterText} · ${WRE_NB_TEAM}`,

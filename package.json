@@ -7,6 +7,7 @@
     "pack": "python3 pack.py"
   },
   "devDependencies": {
+    "acorn": "^8.15.0",
     "jsdom": "^31.0.0"
   }
 }

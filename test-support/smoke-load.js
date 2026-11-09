@@ -1,4 +1,5 @@
-// 冒烟：按 manifest 顺序把 14 个 content script 加载进 jsdom，检查有无加载期异常
+// 冒烟：按 manifest 顺序把全部 content script 加载进 jsdom，检查有无加载期异常
+// （数量不写死：模块数会随版本变，写死只会让注释过期）
 const fs = require('fs');
 const path = require('path');
 const { JSDOM } = require('jsdom');

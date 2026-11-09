@@ -8,8 +8,6 @@ let ghOriginalTitle = null;
 
 let ghOriginalFavicons = null;
 
-let ghLastChapterFile = '';
-
 // 标签页身份跟着当前章走：窗口标题 / file chip / Notion 面包屑三处必须是同一个名字。
 // 具体拼法由皮肤注册表决定（github 用 .md 文件名，notion 用页面名）。
 function ghIdentityTarget() {
@@ -416,9 +414,10 @@ function ghSyncChapterIdentity() {
   if (chip) chip.textContent = chapterText;
   const crumb = profile.crumbSelector ? document.querySelector(profile.crumbSelector) : null;
   if (crumb) crumb.textContent = chapterText;
-  const barName = document.querySelector('.wre-gh-filebar-name');
+  // 文件头也是皮肤的一部分：选择器从注册表拿，别在这里硬编码 GitHub 的类名
+  const barName = profile.filebarNameSelector ? document.querySelector(profile.filebarNameSelector) : null;
   if (barName) barName.textContent = chapterText;
-  const barMeta = document.querySelector('.wre-gh-filebar-meta');
+  const barMeta = profile.filebarMetaSelector ? document.querySelector(profile.filebarMetaSelector) : null;
   if (barMeta) barMeta.textContent = ghFilebarMetaText();
   ghApplyPageIdentity();
 }
@@ -429,8 +428,6 @@ function ghSyncChapterIdentity() {
  * 判据是「首行文字的顶边」与「文件头底边」的间距 —— 量不到（jsdom、
  * 页面还在重渲染、或者已经滚到半截）就当作放不下，直接不显示。
  * 这条项目铁律：宁可少一行假界面，也不能压住真正文。 */
-let ghFilebarFitKey = '';
-
 function ghContentText() {
   const el = document.querySelector('.readerChapterContent');
   if (!el) return '';
@@ -454,14 +451,17 @@ function ghFilebarMetaText() {
   return `${lines.toLocaleString()} lines (${lines.toLocaleString()} loc) · ${kb} KB`;
 }
 
+// 注意不能用 `parseFloat(x) || fallback`：Notion 皮肤把这两项合法地定义成 0px，
+// 用 || 会把 0 当成「没定义」而多算 84px。
+function ghCssPx(name, fallback) {
+  const value = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+  return Number.isFinite(value) ? value : fallback;
+}
+
 function ghFilebarBottomPx() {
   const rect = document.querySelector('.wre-gh-filebar')?.getBoundingClientRect?.();
   if (rect && rect.height > 0) return rect.bottom;
-  const css = getComputedStyle(document.documentElement);
-  const top = parseFloat(css.getPropertyValue('--wre-gh-topbar-h')) || 48;
-  const repobar = parseFloat(css.getPropertyValue('--wre-gh-repobar-h')) || 44;
-  const filebar = parseFloat(css.getPropertyValue('--wre-gh-filebar-h')) || 40;
-  return top + repobar + filebar;
+  return ghCssPx('--wre-gh-topbar-h', 48) + ghCssPx('--wre-gh-repobar-h', 44) + ghCssPx('--wre-gh-filebar-h', 40);
 }
 
 // 正文第一行文字的顶边（视口坐标）。翻页模式直接看 canvas 顶边。
@@ -547,9 +547,9 @@ function ghSyncChromeInner(force) {
       const wait = ghLastModeReflowAt + 1200 - now;
       if (wait <= 0) {
         ghLastModeReflowAt = now;
-        setTimeout(() => triggerWereadLayoutReflow('gh-mode-switch'), 120);
+        wreSetTimeout(() => triggerWereadLayoutReflow('gh-mode-switch'), 120);
       } else if (!ghModeReflowTrailing) {
-        ghModeReflowTrailing = setTimeout(() => {
+        ghModeReflowTrailing = wreSetTimeout(() => {
           ghModeReflowTrailing = null;
           ghLastModeReflowAt = Date.now();
           triggerWereadLayoutReflow('gh-mode-switch-trailing');

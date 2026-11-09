@@ -67,13 +67,38 @@ function clampNumber(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+/* 延迟任务统一登记：退出伪装时一次性取消。
+ * 单独一个 setTimeout 的问题是「关了伪装它还会响」—— 表现为按 G 之后页面又闪一下，
+ * 而这正是本项目最想避免的那种「又刷新了」的错觉。 */
+const wreTimers = new Set();
+
+function wreSetTimeout(fn, delay) {
+  const id = window.setTimeout(() => {
+    wreTimers.delete(id);
+    fn();
+  }, delay);
+  wreTimers.add(id);
+  return id;
+}
+
+function wreClearTimeout(id) {
+  if (!id) return;
+  window.clearTimeout(id);
+  wreTimers.delete(id);
+}
+
+function wreClearTimers() {
+  wreTimers.forEach((id) => window.clearTimeout(id));
+  wreTimers.clear();
+}
+
 function scheduleWereadLayoutReflow(reason) {
   const now = Date.now();
   if (now - lastReflowAt < 120) {
     return;
   }
   lastReflowAt = now;
-  window.setTimeout(() => {
+  wreSetTimeout(() => {
     triggerWereadLayoutReflow(reason);
   }, 0);
 }
