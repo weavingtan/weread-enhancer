@@ -2,6 +2,13 @@
  * 由 content.js 拆分而来：语句顺序与原文件一致，跨文件共享同一全局作用域。
  */
 
+// 章节名来自页面/书源，拼进 innerHTML 前必须转义（否则「书名里带标签」会直接执行）
+function ghEscapeHtml(text) {
+  return String(text == null ? '' : text).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
 const GH_CATALOG_SCOPES = [
   '.readerCatalog',
   '[class*="readerCatalog"]',
@@ -256,13 +263,13 @@ function ghRenderCatalogTree(force) {
   }
 
   tree.innerHTML = items.map((el, i) => {
-    const chapter = (el.textContent || '').trim().replace(/"/g, '&quot;');
+    const chapter = (el.textContent || '').trim();
     return `
-    <div class="wre-gh-tree-item${i === activeIdx ? ' wre-gh-tree-active' : ''}"
-      data-catalog="${i}" data-chapter="${chapter}">
-      ${WRE_SVG.file}
-      <span>${ghChapterFileName(el.textContent)}</span>
-    </div>`;
+   <div class="wre-gh-tree-item${i === activeIdx ? ' wre-gh-tree-active' : ''}"
+     data-catalog="${i}" data-chapter="${ghEscapeHtml(chapter)}">
+     ${WRE_SVG.file}
+     <span>${ghEscapeHtml(ghChapterFileName(el.textContent))}</span>
+   </div>`;
   }).join('');
 
   // 渲染时把原始节点存下来：页面重渲染后索引会错位，引用也可能失效，

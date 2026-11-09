@@ -91,8 +91,11 @@ function ghClickChapterNav(dir) {
 
 let ghPagerRaf = null;
 
+let ghPagerVisible = false;
+
 // 分页条贴着正文卡片的左右边缘，而不是贴视口边缘：
 // Previous 的左边缘对齐卡片左边、Next 的右边缘对齐卡片右边（大屏卡片居中时才不会「Next 飘在灰色空地里」）。
+// 侧栏显示时 Previous 必须让到侧栏右边，双栏模式下正文容器可能从 x=0 起，不然会盖住文件树。
 function ghAlignPagerToCard(pager) {
   const card = document.querySelector('.readerChapterContent');
   const vw = document.documentElement.clientWidth || window.innerWidth;
@@ -103,40 +106,67 @@ function ghAlignPagerToCard(pager) {
   }
   const rect = card.getBoundingClientRect();
   if (!rect || rect.width <= 0) return;
-  pager.style.left = `${Math.max(8, Math.round(rect.left))}px`;
-  pager.style.right = `${Math.max(8, Math.round(vw - rect.right))}px`;
+
+  let minLeft = 8;
+  if (document.documentElement.classList.contains('wre-gh-sidebar-ok')) {
+    const side = document.querySelector('.wre-gh-sidebar');
+    const sideRight = side?.getBoundingClientRect?.().right || 0;
+    if (sideRight > 0) minLeft = Math.round(sideRight) + 12;
+  }
+
+  const left = Math.max(minLeft, Math.round(rect.left));
+  const right = Math.max(8, Math.round(vw - rect.right));
+  // 两侧加起来超过视口（极端窄屏 + 宽侧栏）就别硬塞，回到默认 32px 两端
+  if (left + right + 120 > vw) {
+    pager.style.left = '';
+    pager.style.right = '';
+    return;
+  }
+  pager.style.left = `${left}px`;
+  pager.style.right = `${right}px`;
 }
 
-function ghUpdatePager() {
+function ghUpdatePager(forceAlign) {
   ghPagerRaf = null;
   const pager = document.querySelector('.wre-gh-pager');
   if (!pager) return;
   if (!document.documentElement.classList.contains('wre-disguise')) {
     pager.classList.remove('wre-pager-visible');
+    ghPagerVisible = false;
     return;
   }
-  ghAlignPagerToCard(pager);
-  if (ghIsDoubleColumn()) {
-    pager.classList.add('wre-pager-visible');
-    return;
-  }
-  const content = document.querySelector('.readerChapterContent');
-  let scroller = null;
-  let node = content?.parentElement;
-  while (node && node !== document.body) {
-    const overflowY = getComputedStyle(node).overflowY;
-    if (/(auto|scroll)/.test(overflowY) && node.scrollHeight > node.clientHeight + 10) {
-      scroller = node;
-      break;
+
+  const isDouble = ghIsDoubleColumn();
+  let visible = true;
+  if (!isDouble) {
+    const content = document.querySelector('.readerChapterContent');
+    let scroller = null;
+    let node = content?.parentElement;
+    while (node && node !== document.body) {
+      const overflowY = getComputedStyle(node).overflowY;
+      if (/(auto|scroll)/.test(overflowY) && node.scrollHeight > node.clientHeight + 10) {
+        scroller = node;
+        break;
+      }
+      node = node.parentElement;
     }
-    node = node.parentElement;
+    const top = scroller ? scroller.scrollTop : window.scrollY;
+    const viewport = scroller ? scroller.clientHeight : window.innerHeight;
+    const total = scroller ? scroller.scrollHeight : (document.scrollingElement || document.documentElement).scrollHeight;
+    visible = top + viewport >= total - 260;
   }
-  const top = scroller ? scroller.scrollTop : window.scrollY;
-  const viewport = scroller ? scroller.clientHeight : window.innerHeight;
-  const total = scroller ? scroller.scrollHeight : (document.scrollingElement || document.documentElement).scrollHeight;
-  pager.classList.toggle('wre-pager-visible', top + viewport >= total - 260);
+  pager.classList.toggle('wre-pager-visible', visible);
+
+  // 对齐要量 rect（会强制一次布局），滚动时每帧都量太亏：
+  // 只在「刚变可见 / 显式要求（resize、切章、切模式）」时重算，其余时候沿用上次的左右边距。
+  if (visible && (!ghPagerVisible || forceAlign)) ghAlignPagerToCard(pager);
+  ghPagerVisible = visible;
 }
 
 function ghOnPagerScroll() {
-  if (!ghPagerRaf) ghPagerRaf = requestAnimationFrame(ghUpdatePager);
+  if (!ghPagerRaf) ghPagerRaf = requestAnimationFrame(() => ghUpdatePager(false));
+}
+
+function ghRepositionPager() {
+  ghUpdatePager(true);
 }

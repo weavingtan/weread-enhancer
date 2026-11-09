@@ -262,6 +262,12 @@ function ghSyncSidebarFits() {
   if (width === null) ghClearSidebarFits();
   else ghApplySidebarVisualWidth(width);
   log('info', '侧栏留白测量', { double: isDouble, textLeft, canvasLeft, left, width });
+
+  // 侧栏有无/宽度变了，分页条能用的左边界跟着变：可见时补一次对齐
+  if (ghPagerVisible) {
+    const pager = document.querySelector('.wre-gh-pager');
+    if (pager) ghAlignPagerToCard(pager);
+  }
 }
 
 function ghHideNativePager() {
