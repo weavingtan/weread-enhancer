@@ -2433,6 +2433,26 @@ function ghChapterFileName(text) {
 
 let ghCatalogSignature = '';
 let ghLastCatalogScan = 0;
+let ghCatalogRefs = [];
+
+// 目录项点击：微信读书的目录项不一定吃裸 .click()，把指针事件按序补一遍，
+// 并连同最近的可点祖先（li / [class*=item]）一起试，它们的点击处理器常挂在父层。
+function ghActivateCatalogItem(el) {
+  if (!el) return;
+  const targets = [el];
+  const parent = el.parentElement;
+  if (parent && /item|li/i.test(`${parent.tagName} ${parent.className}`)) targets.push(parent);
+  targets.forEach((node) => {
+    try {
+      node.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true, cancelable: true, pointerType: 'mouse', isPrimary: true,
+      }));
+    } catch (e) { /* 不支持 PointerEvent 就只发鼠标事件 */ }
+    node.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+    node.click();
+  });
+}
 
 function ghRenderCatalogTree(force) {
   if (wreCurrentSkin() !== 'github') return;
@@ -2462,13 +2482,24 @@ function ghRenderCatalogTree(force) {
       <span>${ghChapterFileName(el.textContent)}</span>
     </div>`).join('');
 
+  // 渲染时把原始节点存下来：页面重渲染后索引可能错位，用引用更稳
+  ghCatalogRefs = items.slice();
   tree.querySelectorAll('[data-catalog]').forEach((node) => {
     node.addEventListener('click', () => {
       const idx = Number(node.dataset.catalog);
-      const target = ghCollectCatalogItems()[idx];
+      const ref = ghCatalogRefs[idx];
+      const target = (ref && ref.isConnected) ? ref : ghCollectCatalogItems()[idx];
       if (!target) return;
-      target.click();
+      const before = (document.querySelector('.readerTopBar_title_chapter')?.textContent || '').trim();
+      ghActivateCatalogItem(target);
       log('info', '侧栏目录跳章', { idx, chapter: (target.textContent || '').trim() });
+      // 微信读书目录懒加载时点击会静默失败：700ms 后章名没变就明确告诉用户一次
+      if (before) {
+        setTimeout(() => {
+          const after = (document.querySelector('.readerTopBar_title_chapter')?.textContent || '').trim();
+          if (after === before) ghToast('这一章没跳过去，先点开一次目录再试');
+        }, 700);
+      }
     });
   });
 }
