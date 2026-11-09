@@ -8,10 +8,17 @@ let ghOriginalTitle = null;
 
 let ghOriginalFavicons = null;
 
+let ghLastChapterFile = '';
+
+// 标签页身份跟着当前章走：窗口标题 / file chip / Notion 面包屑三处必须是同一个文件名。
+// 常量那套（README.md）只在拿不到当前章时兜底。
 function ghIdentityTarget() {
-  return wreCurrentSkin() === 'notion'
-    ? { title: WRE_NB_PAGE_TITLE, favicon: WRE_NB_FAVICON }
-    : { title: WRE_GH_PAGE_TITLE, favicon: WRE_GH_FAVICON };
+  const label = ghCurrentChapterLabel();
+  const file = label ? ghChapterFileName(label) : '';
+  if (wreCurrentSkin() === 'notion') {
+    return { title: `${label || WRE_NB_PAGE} · ${WRE_NB_TEAM}`, favicon: WRE_NB_FAVICON };
+  }
+  return { title: `${file || WRE_GH_FILE} at main · ${WRE_GH_OWNER}/${WRE_GH_REPO}`, favicon: WRE_GH_FAVICON };
 }
 
 function ghApplyPageIdentity() {
@@ -393,6 +400,22 @@ function ghSizeSignature() {
   return `${window.innerWidth}x${window.innerHeight}|${c}|${WRE_STATE.screenRatio}`;
 }
 
+// 「当前文件」三处同步：file chip、窗口标题、Notion 面包屑。
+// 只在章节真的变了时写 DOM —— 切章会连带一串同步调用，每次都写标题会让标签页闪。
+function ghSyncChapterIdentity() {
+  const label = ghCurrentChapterLabel();
+  const file = label ? ghChapterFileName(label) : '';
+  const key = `${wreCurrentSkin()}|${label}`;
+  if (key === ghLastChapterFile) return;
+  ghLastChapterFile = key;
+
+  const chip = document.querySelector('.wre-gh-file-chip-label');
+  if (chip && file) chip.textContent = file;
+  const nbCrumb = document.querySelector('.wre-nb-crumb');
+  if (nbCrumb) nbCrumb.textContent = label || WRE_NB_PAGE;
+  ghApplyPageIdentity();
+}
+
 function ghSyncChromeInner(force) {
   // 顺带把观察目标补上：正文 / canvas 被重建时，下一次任意同步就能恢复观察
   ghEnsureLayoutObservers();
@@ -447,6 +470,7 @@ function ghSyncChromeInner(force) {
     ghSyncSidebarFits();
   }
   ghRenderCatalogTree();
+  ghSyncChapterIdentity();
 
   // 伪装态正文固定 GitHub 卡片色：暖色/米黄主题留在「按 G 退出伪装」时自己看。
   // 米黄卡片贴在灰白外壳上色块断层太明显，一眼就看得出不是网页。

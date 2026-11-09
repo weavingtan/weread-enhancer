@@ -85,6 +85,18 @@ function ghChapterFileName(text) {
   return /\.\w{1,5}$/.test(base) ? base : `${base}.md`;
 }
 
+// 当前章 = 目录里的高亮项（顶栏没有章名，只能从目录拿）。
+// 目录还没渲染过就返回空串，调用方退回 README.md ——「当前文件」在各处必须一致，
+// 否则侧栏高亮第十二章、窗口标题还写着 README.md，一眼就穿帮。
+function ghCurrentChapterLabel() {
+  const selected = ghCatalogSelectedLabel();
+  if (selected) return selected;
+  const items = ghCollectCatalogItems();
+  const idx = ghCatalogActiveIndex(items);
+  if (idx >= 0) return (items[idx].textContent || '').trim();
+  return '';
+}
+
 // 上次渲染用的采集结果（同一数组引用）与当前章索引：都没变就不必重铺 DOM，
 // 也不再需要把每章名字 join 成字符串签名（几百章时那次 join 本身就是开销）。
 let ghCatalogRenderItems = null;
@@ -467,7 +479,7 @@ function ghShellHtmlGithub() {
           <span class="wre-gh-tab">${WRE_SVG.pr}Pull requests</span>
           <span class="wre-gh-tab">${WRE_SVG.actions}Actions</span>
         </nav>
-        <span class="wre-gh-file-chip">${WRE_GH_FILE}</span>
+        <span class="wre-gh-file-chip">${WRE_SVG.file}<span class="wre-gh-file-chip-label">${WRE_GH_FILE}</span></span>
       </div>
     </div>
 
@@ -597,6 +609,7 @@ function ghEnsureShell(force) {
   document.documentElement.dataset.wreSkin = skin;
   ghBindShell(shell);
   ghResetCatalogRender(); // 骨架重建后目录要重新铺一遍
+  ghLastChapterFile = ''; // 骨架里的 file chip / 标题都是新 DOM，必须重写一遍
   ghRenderCatalogTree(true);
   return shell;
 }

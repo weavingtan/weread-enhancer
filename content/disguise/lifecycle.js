@@ -46,6 +46,7 @@ function ghStopCanvasProbe() {
 }
 
 function ghSetActive(on) {
+  ghLastChapterFile = ''; // 进出伪装都重算一次「当前文件」，别沿用上一轮的身份
   if (on) {
     document.documentElement.classList.add('wre-disguise');
     ghEnsureShell();

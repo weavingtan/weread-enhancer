@@ -853,6 +853,10 @@ html.wre-disguise #wre-gh-shell {
 }
 .wre-gh-file-chip {
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 320px;
   padding: 2px 10px;
   font-size: 12px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -860,6 +864,15 @@ html.wre-disguise #wre-gh-shell {
   border: 1px solid var(--wre-gh-border);
   border-radius: 6px;
   background: var(--wre-gh-panel-bg);
+}
+.wre-gh-file-chip .wre-gh-ico {
+  width: 14px;
+  height: 14px;
+}
+.wre-gh-file-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 伪分页条：左右边缘由 JS（ghAlignPagerToCard）对齐到正文卡片，Previous 贴卡片左边、
