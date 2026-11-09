@@ -146,4 +146,6 @@ function log(level, message, meta) {
 - 延迟任务统一走 `wreSetTimeout` 登记、退出伪装 `wreClearTimers()` 清空；
 - 三处「定位节点 → 跳章 → 失败提示」统一成 `ghJumpChapter()`；
 - 章节查找器源列表按目录数组引用缓存；目录高亮让「当前章变了」绕过节流即时生效；
-- 书签检测对「目录项 <3 时的兜底分支」做了健壮化（见 bookmark spec）。
+- 书签检测对「目录项 <3 时的兜底分支」做了健壮化（见 bookmark spec）；
+- 屏占比恢复只认阅读页：书城 / 书架不再轮询 20s、不再「兜底」写入、不再报
+  「未能初始化 screenBasePx」（SPA 进书后由 `ghSetActive(true)` 的延迟重试先补量基准再应用）。

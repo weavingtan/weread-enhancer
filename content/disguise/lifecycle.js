@@ -60,13 +60,16 @@ function ghSetActive(on) {
     if (!detectScrollMode()) scheduleWereadLayoutReflow('gh-disguise-on');
     // 阅读器 DOM 可能晚于 content script 就绪：延后补一次屏占比 + 侧栏测量。
     wreSetTimeout(() => {
-      applyScreenRatio(WRE_STATE.screenRatio);
-      // 屏占比 100% = 没改正文宽度，不需要让微信读书再分页一次
-      if (WRE_STATE.screenRatio !== 100 && !detectScrollMode()) {
-        scheduleWereadLayoutReflow('gh-ratio-retry');
-      }
-      ghSyncSidebarFits();
-      ghHideNativePager();
+      // SPA 进书（书架 → 阅读器）时基准可能还没量过：先补量再应用，否则翻页模式没有 px 上限
+      primeScreenBasePx(false).then(() => {
+        applyScreenRatio(WRE_STATE.screenRatio);
+        // 屏占比 100% = 没改正文宽度，不需要让微信读书再分页一次
+        if (WRE_STATE.screenRatio !== 100 && !detectScrollMode()) {
+          scheduleWereadLayoutReflow('gh-ratio-retry');
+        }
+        ghSyncSidebarFits();
+        ghHideNativePager();
+      });
     }, 1200);
 
     if (!ghBodyObserver) {

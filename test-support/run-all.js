@@ -25,6 +25,7 @@ const ORDER = [
   'skin-test.js',       // 皮肤注册表
   'filebar-test.js',    // 文件头（自适应显示 / Copy）
   'bookmark-test.js',   // 侧栏树书签 ⭐
+  'shelf-boot-test.js', // 书架页跳过屏占比恢复
   'layout-observer-test.js', // 布局观察器
   'log-gate-test.js',   // 日志闸门
   'boot-probe-test.js', // 重载探针

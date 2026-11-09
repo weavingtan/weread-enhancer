@@ -2,6 +2,12 @@
  * 必须最后加载：init 里调用的函数分散在前面的模块里。
  */
 async function applySavedScreenRatioOnInit() {
+  // 书城 / 书架页没有正文容器：在这里轮询 20s 只会白等，最后还「兜底」往书架页写一次
+  // 屏占比（纯噪音 + 无意义样式写入）。SPA 进书后的恢复由 ghSetActive(true) 的延迟重试负责。
+  if (!isReaderPage()) {
+    log('info', '非阅读页，跳过屏占比恢复');
+    return false;
+  }
   const ratio = WRE_STATE.screenRatio;
   const maxAttempts = 50; // 400ms × 50 = 20s（rAF 在后台标签页会停，改用定时轮询）
   for (let i = 0; i < maxAttempts; i += 1) {
@@ -115,7 +121,11 @@ async function init() {
   wreStyleTag.textContent = '';
   wreLastWrittenCss = '';
   const t3 = performance.now();
-  await primeScreenBasePx(true);
+  // 非阅读页（书城/书架）量不到基准容器，只会打一条「未能初始化」的 warn；
+  // 进书后由 ghSetActive(true) 的延迟重试补量（那里先 prime 再应用）。
+  if (isReaderPage()) {
+    await primeScreenBasePx(true);
+  }
   const t4 = performance.now();
   await applySavedScreenRatioOnInit();
   const t5 = performance.now();
