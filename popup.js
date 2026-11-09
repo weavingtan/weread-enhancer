@@ -33,7 +33,9 @@
     disguise: true,
     skin: 'github',
     immersiveMode: false,
-    screenRatio: 80,
+    // 100 = 不干预正文宽度；只有用户亲手拖过滑杆才记忆自定义值
+    screenRatio: 100,
+    ratioUserSet: false,
     autoRead: { enabled: false, speed: 50, direction: 'down' },
     bgLightIdx: 0,
     bgDarkIdx: 8,
@@ -164,7 +166,9 @@
     });
 
     $('wre-pop-ratio')?.addEventListener('input', (event) => {
-      state.screenRatio = Number.parseInt(event.target.value, 10) || 80;
+      state.screenRatio = Number.parseInt(event.target.value, 10) || 100;
+      // 标记「用户亲手设过」，否则下次加载会被当成默认值回退到 100%
+      state.ratioUserSet = true;
       applyUI();
       save();
     });

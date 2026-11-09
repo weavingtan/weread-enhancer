@@ -3,7 +3,11 @@ const WRE_STORAGE_KEYS = {
   state: 'wreState',
 };
 const WRE_DEFAULT_STATE = {
-  screenRatio: 80,
+  // 100% = 不干预正文宽度（与微信读书原生一致）。改宽度会在每次窗口缩放时
+  // 让微信读书重新分页/重渲染，看起来就是「页面又刷新了」，所以默认不插手。
+  screenRatio: 100,
+  // 用户是否亲手拖过屏占比滑杆：没动过就一直按 100% 处理，动过才记忆自定义值
+  ratioUserSet: false,
   screenBasePx: null,
   screenBaseMode: 'container-v1',
   autoRead: {
@@ -156,6 +160,14 @@ async function loadState() {
     }
     if (WRE_STATE.screenBaseMode !== WRE_DEFAULT_STATE.screenBaseMode) {
       WRE_STATE.screenBaseMode = WRE_DEFAULT_STATE.screenBaseMode;
+      WRE_STATE.screenBasePx = null;
+      await chrome.storage.local.set({ [WRE_STORAGE_KEYS.state]: WRE_STATE });
+    }
+    // 旧版本把 80% 当默认值写进了存储；用户从没拖过滑杆的话，回到 100%（不干预宽度）。
+    // 干预正文宽度的代价是每次窗口缩放微信读书都要重新分页重渲染，表现为「页面又刷新了」。
+    if (WRE_STATE.ratioUserSet !== true && WRE_STATE.screenRatio !== 100) {
+      log('info', '屏占比未由用户设置过，回退到 100%（不干预正文宽度）', { was: WRE_STATE.screenRatio });
+      WRE_STATE.screenRatio = 100;
       WRE_STATE.screenBasePx = null;
       await chrome.storage.local.set({ [WRE_STORAGE_KEYS.state]: WRE_STATE });
     }
@@ -329,6 +341,11 @@ function isReaderPage() {
 function buildRatioCSS(ratio) {
   const numericRatio = clampNumber(Number(ratio), 50, 100);
 
+  // 100% = 不写任何宽度规则。这一条很关键：翻页模式原来即使 100% 也会写
+  // `.readerChapterContent { width: <基准px> }`，缩放窗口后这个 px 不会跟着变，
+  // 微信读书发现容器宽度对不上就会重新分页/重渲染（用户看到的「刷新两次」）。
+  if (numericRatio >= 100) return '';
+
   if (detectScrollMode()) {
     // 滚动模式：作用于原生正文容器 .app_content，用相对视口的百分比 max-width 居中，
     // 不沿用翻页模式的固定 px 基准（否则会超出原生容器宽度导致溢出 + 不居中 + 水平滚动条）。
@@ -414,7 +431,9 @@ function updateStyleTag(ratio) {
       enableToolbarFloat = !!contentRect && contentRect.width > tr.width + 4;
     } else {
       // 翻页模式：① 比例 >85%（86% 及以上触发，85% 刚好放下工具栏）；② 元素实际溢出视口（兜底）
-      enableToolbarFloat = numericRatio > 85 || tr.left < -1 || tr.right > window.innerWidth + 1 || cr.right > window.innerWidth;
+      // 100% 是原生宽度，工具栏本来就在原生位置放得下，别去接管它
+      enableToolbarFloat = (numericRatio < 100 && numericRatio > 85)
+        || tr.left < -1 || tr.right > window.innerWidth + 1 || cr.right > window.innerWidth;
     }
     log('info', '工具栏位置检测', {
       mode: scrollMode ? 'scroll' : 'page',
