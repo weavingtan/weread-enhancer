@@ -201,34 +201,67 @@ function ghClearSidebarFits() {
   }
 }
 
+// 真实文字左边界：用 Range 量正文里第一个有内容的文本节点。
+// 容器 rect.left 不等于字的左边界（正文容器有内边距、居中分栏时容器比字更靠左），
+// 照容器留白就会压到字。取该文本节点所有行框里最靠左的那个，避开首行缩进。
+function ghFirstTextLeft() {
+  const scope = document.querySelector('.readerChapterContent') || document.querySelector('.app_content');
+  if (!scope) return null;
+  const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, null);
+  let seen = 0;
+  while (walker.nextNode() && seen < 40) {
+    const node = walker.currentNode;
+    if (!node.nodeValue || node.nodeValue.trim().length < 2) continue;
+    seen += 1;
+    if (typeof document.createRange !== 'function') return null;
+    const range = document.createRange();
+    if (typeof range.getClientRects !== 'function') return null;
+    let rects = null;
+    try {
+      range.selectNodeContents(node);
+      rects = range.getClientRects();
+    } catch (e) {
+      continue;
+    }
+    if (!rects) continue;
+    let min = Infinity;
+    for (let i = 0; i < rects.length; i += 1) {
+      const r = rects[i];
+      if (r.width > 8 && r.height > 4 && r.left >= 0 && r.left < window.innerWidth && r.left < min) min = r.left;
+    }
+    if (Number.isFinite(min)) return min;
+  }
+  return null;
+}
+
 // 侧栏能不能站住，统一按「正文左侧的真实留白」判断：
-// - 双栏：读 Canvas 像素，找书页页边距；
-// - 滚动模式：正文被 CSS 收窄到 280px 之后量 .app_content；
-// - 单栏翻页：正文定宽居中，只能吃页边留白，量 .readerChapterContent。
+// - 首选真实文字左边界（Range 量字），双栏再叠加 Canvas 像素找书页页边距；
+// - 都量不到时退回容器 rect（滚动模式 = .app_content，翻页 = .readerChapterContent）；
+// - 多个候选取最靠左的那个：宁可侧栏窄一点，也绝不让它压住正文。
 function ghSyncSidebarFits() {
   if (!document.querySelector('.wre-gh-sidebar')) return;
 
-  let left = null;
-  if (ghIsDoubleColumn()) {
-    left = ghMeasureDoubleColumnLeft();
-  } else {
+  const isDouble = ghIsDoubleColumn();
+  const textLeft = ghFirstTextLeft();
+  const canvasLeft = isDouble ? ghMeasureDoubleColumnLeft() : null;
+  const candidates = [textLeft, canvasLeft].filter((v) => Number.isFinite(v));
+
+  let left = candidates.length ? Math.min(...candidates) : null;
+  if (left === null) {
     const isScroll = document.documentElement.classList.contains('wre-gh-scroll');
     const el = isScroll
       ? (document.querySelector('.app_content') || document.querySelector('.readerChapterContent'))
       : document.querySelector('.readerChapterContent');
-    if (el) {
-      const rect = el.getBoundingClientRect();
-      if (rect.width > 0) left = rect.left;
-    }
+    const rect = el?.getBoundingClientRect?.();
+    if (rect && rect.width > 0) left = rect.left;
   }
 
   // 留 10px 呼吸位，绝不贴着字裁断
   const avail = left === null ? 0 : Math.floor(left - 10);
-  if (avail >= GH_SIDEBAR_MIN_W) {
-    ghApplySidebarVisualWidth(Math.min(GH_SIDEBAR_MAX_W, avail));
-  } else {
-    ghClearSidebarFits();
-  }
+  const width = avail >= GH_SIDEBAR_MIN_W ? Math.min(GH_SIDEBAR_MAX_W, avail) : null;
+  if (width === null) ghClearSidebarFits();
+  else ghApplySidebarVisualWidth(width);
+  log('info', '侧栏留白测量', { double: isDouble, textLeft, canvasLeft, left, width });
 }
 
 function ghHideNativePager() {
