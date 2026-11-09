@@ -66,6 +66,9 @@ web/content/.trash/
 .vercel/
 web/.vercel/
 
+# 本机调试用的页面快照（含真实书页内容，不入库）
+a.html
+
 # 系统
 .DS_Store
 Thumbs.db

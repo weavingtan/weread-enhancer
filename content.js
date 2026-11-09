@@ -2402,11 +2402,16 @@ const GH_CATALOG_SCOPES = [
   '[class*="catalog"]',
 ];
 
-// 从微信读书目录 DOM 里取章节项；取不到返回空数组，调用方回退静态假树
+// 从微信读书目录 DOM 里取章节项；取不到返回空数组，调用方回退静态假树。
+// 章节名固定是 .readerCatalog_list_item_title_text（a.html 实测每章一个），
+// 直接按它取最稳：笼统按 li/[class*=item] 取会把行内 meta（「当前读到 40%」「书签」）也算成章节。
 function ghCollectCatalogItems() {
   for (const sel of GH_CATALOG_SCOPES) {
     const root = document.querySelector(sel);
     if (!root) continue;
+    const titled = Array.from(root.querySelectorAll('[class*="list_item_title_text"]'))
+      .filter((el) => (el.textContent || '').trim().length > 0);
+    if (titled.length >= 3) return titled;
     const raw = Array.from(root.querySelectorAll('li, [class*="item"], [class*="Item"]'));
     if (raw.length < 3) continue;
     const items = raw.filter((el) => {
@@ -2475,10 +2480,6 @@ function ghRevealCatalogRoot() {
   };
 }
 
-// 目录项点击：微信读书的目录项不一定吃裸 .click()，把指针事件按序补一遍，
-// 并连同所有可点的行祖先一起试：真实结构是
-// readerCatalog_list_item > readerCatalog_list_item_title > _title_text，
-// 而 _title 的类名里也含 list_item，单靠 closest 只会停在中间层，所以逐层往上收。
 // 模拟一次真实点击：微信读书的控件不吃裸 .click()，把指针事件按真实顺序补一遍，
 // 顺带 hover/focus（有些控件要先 hover 才挂处理器）。伪装态下这些控件是
 // pointer-events:none，合成事件不受影响，所以照样能触发。
@@ -2496,21 +2497,21 @@ function ghDispatchClick(node) {
   node.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
   try { node.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true })); } catch (e) { /* 同上 */ }
   node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+  // 只派发一次 click：再补 node.click() 会让同一个处理器跑两遍（章节会被跳两次）
   node.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-  node.click();
 }
 
+// 目录项点击。真实结构（a.html 实测）：
+//   li.readerCatalog_list_item > .readerCatalog_list_item_inner > .readerCatalog_list_item_info
+//     > .readerCatalog_list_item_title > .readerCatalog_list_item_title_text
+// 事件会冒泡，所以点最内层的章节名一次就够 —— 逐层补点会让跳章触发好几遍。
+// 万一某层处理器拦了冒泡，上层重试会改点整行（见 ghJumpToCatalogEntry）。
 function ghActivateCatalogItem(el, { reveal = true } = {}) {
   if (!el) return;
-  const targets = [el];
-  for (let node = el.parentElement; node && node !== document.body; node = node.parentElement) {
-    const cls = String(node.className || '');
-    if (node.tagName === 'LI' || /list_item/i.test(cls)) targets.push(node);
-  }
   // 点目录按钮本身不要展开面板：那会把「打开面板」这件正事搅乱
   const restore = reveal ? ghRevealCatalogRoot() : null;
   try {
-    targets.forEach(ghDispatchClick);
+    ghDispatchClick(el);
   } finally {
     restore?.();
   }
@@ -2575,9 +2576,20 @@ function ghCloseCatalogPanel() {
   if (trigger) ghActivateCatalogItem(trigger, { reveal: false });
 }
 
-async function ghWaitChapterChange(before, timeout) {
+// 微信读书用 li.readerCatalog_list_item_selected 标当前章：比「正文变了没」更准更便宜
+// （正文可能预渲染了下一章，开头文字不一定会跟着跳）。
+// 注意行的 textContent 还带着 meta（「当前读到 40%」「书签」），只能取标题节点。
+function ghCatalogSelectedLabel() {
+  const row = document.querySelector('.readerCatalog_list_item_selected');
+  if (!row) return '';
+  const title = row.querySelector('[class*="list_item_title_text"]') || row;
+  return (title.textContent || '').trim();
+}
+
+async function ghWaitChapterChange(before, label, timeout) {
   for (let waited = 0; waited < timeout; waited += 100) {
     await ghSleep(100);
+    if (label && ghCatalogSelectedLabel() === label) return true;
     const now = ghChapterTitleText();
     if (now && now !== before) return true;
   }
@@ -2593,33 +2605,24 @@ async function ghJumpToCatalogEntry(node, label) {
   const attempt = async (target, tag) => {
     if (!target) return false;
     ghActivateCatalogItem(target);
-    if (!before) return true; // 没有指纹可判，只能当成功（同原有行为）
-    const ok = await ghWaitChapterChange(before, 600);
+    const ok = await ghWaitChapterChange(before, label, 700);
     report.push(`${tag}${ok ? '成功' : '无效'}`);
     return ok;
   };
 
   const opened = await ghOpenCatalogPanel();
-  if (opened) {
-    const items = ghCollectCatalogItems();
-    // 面板一打开微信读书可能整块重渲染，侧栏缓存的节点会失效 → 优先用重新取到的节点
-    const fresh = items.find((el) => (el.textContent || '').trim() === label);
-    const anchor = fresh || node;
-    const row = anchor?.closest?.('.readerCatalog_list_item') || anchor?.closest?.('[class*="list_item"]');
-    const ok = (fresh && await attempt(fresh, '点章节名'))
-      || (node && node !== fresh && await attempt(node, '点侧栏节点'))
-      || (row && row !== fresh && await attempt(row, '点整行'));
-    ghCloseCatalogPanel();
-    if (ok) return { ok: true, report };
-    report.push(`面板${ghCatalogRootSize()}·${items.length}项`);
-    return { ok: false, report };
-  }
+  if (!opened) report.push('目录按钮没打开面板');
 
-  report.push('目录按钮没打开面板');
-  if (await attempt(node, '点章节名')) return { ok: true, report };
+  // 面板一打开微信读书可能整块重渲染，侧栏缓存的节点会失效 → 优先用重新取到的节点
   const items = ghCollectCatalogItems();
   const fresh = items.find((el) => (el.textContent || '').trim() === label);
-  if (fresh && fresh !== node && await attempt(fresh, '重取节点')) return { ok: true, report };
+  const rowOf = (el) => el?.closest?.('.readerCatalog_list_item') || null;
+  const ok = (fresh && await attempt(fresh, '点章节名'))
+    || (node && node !== fresh && await attempt(node, '点侧栏节点'))
+    || (rowOf(fresh || node) && await attempt(rowOf(fresh || node), '点整行'));
+
+  if (opened) ghCloseCatalogPanel();
+  if (ok) return { ok: true, report };
   report.push(`面板${ghCatalogRootSize()}·${items.length}项`);
   return { ok: false, report };
 }

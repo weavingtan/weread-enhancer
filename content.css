@@ -614,6 +614,11 @@ html.wre-disguise [class*="readerCatalog"] {
   opacity: 0 !important;
   pointer-events: none !important;
 }
+/* 目录面板自带的遮罩：面板一开它就盖住整页（画面会整块变暗），一起抹掉 */
+html.wre-disguise .wr_mask {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
 /* 悬浮球在伪装态完全隐藏（可疑） */
 html.wre-disguise #we-read-enhancer-root .wre-fab {
   display: none !important;
