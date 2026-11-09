@@ -2456,8 +2456,14 @@ function ghActivateCatalogItem(el) {
 
 const ghSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// 「当前在第几章」的信号：优先原生顶栏章名，没有就退回正文首段（换章一定会变）
 function ghChapterTitleText() {
-  return (document.querySelector('.readerTopBar_title_chapter')?.textContent || '').trim();
+  const bar = document.querySelector('.readerTopBar_title_chapter')
+    || document.querySelector('[class*="readerTopBar_title"]');
+  const text = (bar?.textContent || '').trim();
+  if (text) return text;
+  const para = document.querySelector('.readerChapterContent p, .app_content p');
+  return (para?.textContent || '').trim().slice(0, 40);
 }
 
 // 微信读书的目录按钮（用于「打开面板后目录项才真的可点」的兜底）
@@ -2556,21 +2562,48 @@ function ghRenderCatalogTree(force) {
 
   // 渲染时把原始节点存下来：页面重渲染后索引会错位，引用也可能失效，
   // 所以点击时还要按 data-chapter 的章节名兜底匹配。
+  // 点击事件走 document 上的委托（见 ghBindCatalogDelegation），不在这里逐个绑：
+  // 侧栏 DOM 可能被重建，逐个绑的监听会一起消失，表现就是「点了毫无反应」。
   ghCatalogRefs = items.slice();
-  tree.querySelectorAll('[data-catalog]').forEach((node) => {
-    node.addEventListener('click', async () => {
-      const idx = Number(node.dataset.catalog);
-      const chapter = node.dataset.chapter || '';
-      const target = ghFindCatalogItem(idx, chapter);
-      if (!target) {
-        ghToast('目录里找不到这一章，稍后再试');
-        return;
-      }
-      log('info', '侧栏目录跳章', { idx, chapter });
-      const result = await ghJumpToCatalogEntry(target, chapter);
-      if (!result.ok) ghToast(`跳章失败：${result.report.join(' · ')}`);
-    });
-  });
+}
+
+let ghCatalogDelegationBound = false;
+
+async function ghHandleCatalogClick(node) {
+  const idx = Number(node.dataset.catalog);
+  const chapter = node.dataset.chapter || '';
+  const target = ghFindCatalogItem(idx, chapter);
+  if (!target) {
+    ghToast(`目录里找不到「${chapter.slice(0, 12)}」`);
+    return;
+  }
+  log('info', '侧栏目录跳章', { idx, chapter });
+  const result = await ghJumpToCatalogEntry(target, chapter);
+  if (!result.ok) ghToast(`跳章失败：${result.report.join(' · ')}`);
+}
+
+// 用捕获阶段委托：即使侧栏 DOM 被整体重建，监听依然有效；
+// 点在侧栏矩形内却没命中我们的节点时，把落点元素告诉你（定位「被谁盖住」）。
+function ghBindCatalogDelegation() {
+  if (ghCatalogDelegationBound) return;
+  ghCatalogDelegationBound = true;
+  document.addEventListener('click', (event) => {
+    if (!document.documentElement.classList.contains('wre-disguise')) return;
+    const node = event.target?.closest?.('.wre-gh-tree-item[data-chapter]');
+    if (node) {
+      event.preventDefault();
+      ghHandleCatalogClick(node);
+      return;
+    }
+    const sidebar = document.querySelector('.wre-gh-sidebar');
+    if (!sidebar || !sidebar.offsetParent) return;
+    const rect = sidebar.getBoundingClientRect();
+    const { clientX: x, clientY: y } = event;
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return;
+    const hit = document.elementFromPoint(x, y);
+    if (!hit || sidebar.contains(hit)) return;
+    ghToast(`点击被 ${hit.tagName.toLowerCase()}.${String(hit.className || '').split(' ')[0]} 挡住`);
+  }, true);
 }
 
 // 找目录项：优先用「还连着 DOM 且章节名对得上」的引用，其次按章节名重新查
@@ -3314,6 +3347,7 @@ function ghPublishActiveTheme() {
 }
 
 function initGhDisguise() {
+  ghBindCatalogDelegation();
   document.addEventListener('scroll', ghOnPagerScroll, { passive: true, capture: true });
   window.addEventListener('resize', ghOnPagerScroll);
   // 拖窗口时 resize 会高频触发：侧栏要量 getBoundingClientRect，去抖后再算
