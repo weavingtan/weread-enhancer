@@ -2485,20 +2485,31 @@ function ghRevealCatalogRoot() {
 // pointer-events:none，合成事件不受影响，所以照样能触发。
 function ghDispatchClick(node) {
   if (!node) return;
+  // 带真实坐标与 detail=1：有些处理器会读 event.detail / clientX / offsetX 做判定
+  const rect = node.getBoundingClientRect();
+  const base = {
+    bubbles: true,
+    cancelable: true,
+    view: window,
+    detail: 1,
+    button: 0,
+    clientX: Math.round(rect.left + rect.width / 2),
+    clientY: Math.round(rect.top + rect.height / 2),
+  };
   ['mouseover', 'mouseenter', 'mousemove'].forEach((type) => {
-    node.dispatchEvent(new MouseEvent(type, { bubbles: type !== 'mouseenter', cancelable: true }));
+    node.dispatchEvent(new MouseEvent(type, { ...base, bubbles: type !== 'mouseenter' }));
   });
   try {
     node.dispatchEvent(new PointerEvent('pointerdown', {
-      bubbles: true, cancelable: true, pointerType: 'mouse', isPrimary: true,
+      ...base, pointerType: 'mouse', isPrimary: true, pointerId: 1,
     }));
   } catch (e) { /* 不支持 PointerEvent 就只发鼠标事件 */ }
   try { node.focus?.({ preventScroll: true }); } catch (e) { /* 不可聚焦就跳过 */ }
-  node.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-  try { node.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true })); } catch (e) { /* 同上 */ }
-  node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+  node.dispatchEvent(new MouseEvent('mousedown', base));
+  try { node.dispatchEvent(new PointerEvent('pointerup', { ...base, pointerId: 1 })); } catch (e) { /* 同上 */ }
+  node.dispatchEvent(new MouseEvent('mouseup', base));
   // 只派发一次 click：再补 node.click() 会让同一个处理器跑两遍（章节会被跳两次）
-  node.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+  node.dispatchEvent(new MouseEvent('click', base));
 }
 
 // 目录项点击。真实结构（a.html 实测）：
@@ -2602,6 +2613,8 @@ async function ghWaitChapterChange(before, label, timeout) {
 async function ghJumpToCatalogEntry(node, label) {
   const report = [];
   const before = ghChapterTitleText();
+  const beforeSelected = ghCatalogSelectedLabel();
+  ghTraceCatalogClicks();
   const attempt = async (target, tag) => {
     if (!target) return false;
     ghActivateCatalogItem(target);
@@ -2617,12 +2630,18 @@ async function ghJumpToCatalogEntry(node, label) {
   const items = ghCollectCatalogItems();
   const fresh = items.find((el) => (el.textContent || '').trim() === label);
   const rowOf = (el) => el?.closest?.('.readerCatalog_list_item') || null;
+  const row = rowOf(fresh || node);
+  const inner = row?.querySelector('.readerCatalog_list_item_inner') || null;
   const ok = (fresh && await attempt(fresh, '点章节名'))
+    || (inner && await attempt(inner, '点内层'))
     || (node && node !== fresh && await attempt(node, '点侧栏节点'))
-    || (rowOf(fresh || node) && await attempt(rowOf(fresh || node), '点整行'));
+    || (row && await attempt(row, '点整行'));
 
   if (opened) ghCloseCatalogPanel();
   if (ok) return { ok: true, report };
+
+  const afterSelected = ghCatalogSelectedLabel();
+  report.push(`选中${beforeSelected.slice(0, 10) || '(空)'}→${afterSelected.slice(0, 10) || '(空)'}`);
   report.push(`面板${ghCatalogRootSize()}·${items.length}项`);
   return { ok: false, report };
 }
@@ -2682,7 +2701,7 @@ async function ghHandleCatalogClick(node) {
   const result = await ghJumpToCatalogEntry(target, chapter);
   if (result.ok) return;
   ghToast(`跳章失败：${result.report.join(' · ')}（诊断已复制）`);
-  ghCopyDiagnostics(target);
+  ghCopyDiagnostics(target, result.report);
 }
 
 // 把一个容器里的「看得见的叶子节点」列出来：类名 / 文字 / aria / 位置尺寸。
@@ -2707,17 +2726,44 @@ function ghDumpVisibleLeaves(scope, limit) {
   return rows.join('\n') || '(empty)';
 }
 
-// 把目录项 / 目录按钮的真实结构复制到剪贴板，便于定位微信读书到底怎么绑定跳转
-function ghCopyDiagnostics(target) {
+// 目录树上的点击痕迹：合成 click 到底有没有进到目录里，是定位「点了没反应」的关键
+const ghCatalogClickTrace = [];
+let ghCatalogTraced = false;
+
+function ghTraceCatalogClicks() {
+  const root = ghCatalogRoot();
+  if (!root || ghCatalogTraced) return;
+  ghCatalogTraced = true;
+  ['pointerdown', 'click'].forEach((type) => {
+    root.addEventListener(type, (event) => {
+      const el = event.target;
+      ghCatalogClickTrace.push(`${type}:${el?.tagName?.toLowerCase()}.${String(el?.className || '').split(' ')[0]}${event.isTrusted ? '(trusted)' : ''}`);
+      if (ghCatalogClickTrace.length > 10) ghCatalogClickTrace.shift();
+    }, true);
+  });
+}
+
+function ghCatalogSnapshot() {
+  const root = ghCatalogRoot();
+  const trigger = ghCatalogTrigger();
+  const trect = trigger?.getBoundingClientRect();
+  return [
+    `panel: style=${root?.getAttribute('style') || '(no style)'}｜rect=${ghCatalogRootSize()}`,
+    `rows: li=${document.querySelectorAll('.readerCatalog_list_item').length}｜items=${ghCollectCatalogItems().length}｜selected=${JSON.stringify(ghCatalogSelectedLabel())}`,
+    `trigger: ${trigger ? `${trigger.tagName.toLowerCase()}.${String(trigger.className)} ${trect ? `${Math.round(trect.width)}x${Math.round(trect.height)}` : ''}` : '(none)'}`,
+    `clickTrace: ${ghCatalogClickTrace.join(' > ') || '(空：合成 click 没进到目录树)'}`,
+  ].join('\n');
+}
+
+// 把目录项 / 尝试过程 / 目录树状态复制到剪贴板，便于定位微信读书到底怎么绑定跳转
+function ghCopyDiagnostics(target, report) {
   const controls = document.querySelector('.readerControls') || document.querySelector('[class*="readerControls"]');
   const topbar = document.querySelector('.readerTopBar') || document.querySelector('[class*="readerTopBar"]');
-  const catalogRoot = document.querySelector('.readerCatalog') || document.querySelector('[class*="catalog"]');
-  const catalogRect = catalogRoot?.getBoundingClientRect();
   const text = [
     `URL: ${location.href}`,
-    `item: ${target?.outerHTML?.slice(0, 600) || '(null)'}`,
-    `parent: ${target?.parentElement?.outerHTML?.slice(0, 300) || '(null)'}`,
-    `catalogRoot: ${catalogRoot?.className || '(none)'}｜${catalogRect ? `${Math.round(catalogRect.width)}x${Math.round(catalogRect.height)}` : '-'}`,
+    `lastJump: ${(report || []).join(' · ') || '(无)'}`,
+    `item: ${target?.outerHTML?.slice(0, 300) || '(null)'}`,
+    `catalog:\n${ghCatalogSnapshot()}`,
     `controls:\n${ghDumpVisibleLeaves(controls, 24)}`,
     `topbar:\n${ghDumpVisibleLeaves(topbar, 24)}`,
   ].join('\n\n');
