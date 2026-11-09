@@ -47,6 +47,9 @@ inbox/
 # 微信开发者工具的本机私有配置（本地编辑器设置，不入库）
 mobile/project.private.config.json
 
+# 测试依赖（npm install 生成，npm test 前装）
+node_modules/
+
 # IDE
 .vscode/
 .idea/

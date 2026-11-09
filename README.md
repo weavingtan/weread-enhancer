@@ -61,6 +61,29 @@ weread-enhancer/
 
 没有 background service worker、没有主机权限、没有远程请求——伪装所需的 GitHub 样式全部内嵌手写 CSS，logo 为内联 SVG 占位。
 
+## 开发与测试
+
+扩展本身没有构建步骤（改完在扩展页点「重新加载」即可）。仓库里带一套 jsdom 断言脚本：
+
+```bash
+npm install   # 只装 devDependencies（jsdom）
+npm test      # 14 个脚本全跑一遍，约 20 秒
+```
+
+每个脚本独立进程、各自合成一份阅读页 DOM：
+
+| 脚本 | 管什么 |
+|---|---|
+| `smoke-load` | 按 manifest 顺序加载全部模块，抓加载期异常与「调用了没定义的函数」 |
+| `entry-test` | 伪装态顶栏头像 → 设置面板、伪装开关、皮肤切换 |
+| `finder-test` | 章节查找器（`/`、过滤、Enter 跳章、`j`/`k`） |
+| `identity-test` | 窗口标题 / 文件 chip / 面包屑跟随当前章 |
+| `skin-test` | 皮肤注册表：两套皮肤目录能力对等 |
+| `layout-observer-test` | ResizeObserver 接管、无 1s 轮询、canvas 探针自停 |
+| `log-gate-test` | info 日志默认静默、`#wre-debug` 恢复 |
+| `boot-probe-test` | 重复加载探针只对循环刷新报警 |
+| 其余 | 章节名转义、Canvas 墨迹测量、分页条对齐、侧栏留白、目录缓存 |
+
 ## 打包
 
 ```bash

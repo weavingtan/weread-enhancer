@@ -1,0 +1,12 @@
+{
+  "name": "weread-enhancer",
+  "private": true,
+  "description": "微信读书摸鱼伪装扩展。扩展本身无构建步骤，这里只放开发用的测试脚本。",
+  "scripts": {
+    "test": "node test-support/run-all.js",
+    "pack": "python3 pack.py"
+  },
+  "devDependencies": {
+    "jsdom": "^31.0.0"
+  }
+}
