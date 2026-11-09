@@ -2376,6 +2376,103 @@ function ghIsDoubleColumn() {
   return rect.width > 0 && rect.height > 0;
 }
 
+// 侧栏兜底：拿不到书籍目录时用静态假文件树，保证 GitHub 仓库观感
+function ghFallbackTreeHtml() {
+  return [
+    { type: 'dir', name: 'src' },
+    { type: 'dir', name: 'docs' },
+    { type: 'dir', name: 'public' },
+    { type: 'file', name: WRE_GH_FILE, active: true },
+    { type: 'file', name: 'package.json' },
+    { type: 'file', name: 'LICENSE' },
+    { type: 'file', name: '.gitignore' },
+  ].map((item) => `
+    <div class="wre-gh-tree-item${item.active ? ' wre-gh-tree-active' : ''}">
+      ${item.type === 'dir' ? WRE_SVG.dir : WRE_SVG.file}
+      <span>${item.name}</span>
+    </div>`).join('');
+}
+
+/* ---- 侧栏 = 书籍目录：把章节渲染成文件列表，点一下真的跳章 ---- */
+
+const GH_CATALOG_SCOPES = [
+  '.readerCatalog',
+  '[class*="readerCatalog"]',
+  '[class*="catalogPanel"]',
+  '[class*="catalog"]',
+];
+
+// 从微信读书目录 DOM 里取章节项；取不到返回空数组，调用方回退静态假树
+function ghCollectCatalogItems() {
+  for (const sel of GH_CATALOG_SCOPES) {
+    const root = document.querySelector(sel);
+    if (!root) continue;
+    const raw = Array.from(root.querySelectorAll('li, [class*="item"], [class*="Item"]'));
+    if (raw.length < 3) continue;
+    const items = raw.filter((el) => {
+      if (el.querySelector('li, [class*="item"], [class*="Item"]')) return false; // 只看叶子项
+      const text = (el.textContent || '').trim();
+      return text.length > 0 && text.length <= 80;
+    });
+    if (items.length >= 3) return items;
+  }
+  return [];
+}
+
+function ghCatalogActiveIndex(items) {
+  return items.findIndex((el) => /active|current|selected/i.test(String(el.className || '')));
+}
+
+// 章节名 → 文件名：`01 开篇.md`，过长截断，避免侧栏换行
+function ghChapterFileName(text) {
+  const clean = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!clean) return WRE_GH_FILE;
+  const base = clean.length > 26 ? `${clean.slice(0, 26)}…` : clean;
+  return /\.\w{1,5}$/.test(base) ? base : `${base}.md`;
+}
+
+let ghCatalogSignature = '';
+let ghLastCatalogScan = 0;
+
+function ghRenderCatalogTree(force) {
+  if (wreCurrentSkin() !== 'github') return;
+  // 目录可能有几百章，正文滚动时观察器会频繁触发同步：1.5s 内不重复全量扫描
+  const now = Date.now();
+  if (!force && now - ghLastCatalogScan < 1500) return;
+  ghLastCatalogScan = now;
+
+  const tree = document.querySelector('.wre-gh-tree');
+  if (!tree) return;
+
+  const items = ghCollectCatalogItems();
+  const activeIdx = ghCatalogActiveIndex(items);
+  // 章节列表或当前章节变了才重建，避免每次同步都重写 DOM
+  const signature = `${items.map((el) => (el.textContent || '').trim()).join('|')}#${activeIdx}`;
+  if (signature === ghCatalogSignature) return;
+  ghCatalogSignature = signature;
+
+  if (items.length === 0) {
+    tree.innerHTML = ghFallbackTreeHtml();
+    return;
+  }
+
+  tree.innerHTML = items.map((el, i) => `
+    <div class="wre-gh-tree-item${i === activeIdx ? ' wre-gh-tree-active' : ''}" data-catalog="${i}">
+      ${WRE_SVG.file}
+      <span>${ghChapterFileName(el.textContent)}</span>
+    </div>`).join('');
+
+  tree.querySelectorAll('[data-catalog]').forEach((node) => {
+    node.addEventListener('click', () => {
+      const idx = Number(node.dataset.catalog);
+      const target = ghCollectCatalogItems()[idx];
+      if (!target) return;
+      target.click();
+      log('info', '侧栏目录跳章', { idx, chapter: (target.textContent || '').trim() });
+    });
+  });
+}
+
 function ghShellHtmlGithub() {
   return `
     <div class="wre-gh-topbar">
@@ -2422,19 +2519,7 @@ function ghShellHtmlGithub() {
       <div class="wre-gh-side-branch">${WRE_SVG.branch}<span>main</span></div>
       <div class="wre-gh-side-search">${WRE_SVG.search}<span>Go to file</span><kbd>t</kbd></div>
       <div class="wre-gh-tree">
-        ${[
-          { type: 'dir', name: 'src' },
-          { type: 'dir', name: 'docs' },
-          { type: 'dir', name: 'public' },
-          { type: 'file', name: WRE_GH_FILE, active: true },
-          { type: 'file', name: 'package.json' },
-          { type: 'file', name: 'LICENSE' },
-          { type: 'file', name: '.gitignore' },
-        ].map((item) => `
-          <div class="wre-gh-tree-item${item.active ? ' wre-gh-tree-active' : ''}">
-            ${item.type === 'dir' ? WRE_SVG.dir : WRE_SVG.file}
-            <span>${item.name}</span>
-          </div>`).join('')}
+        ${ghFallbackTreeHtml()}
       </div>
     </aside>
 
@@ -2530,6 +2615,8 @@ function ghEnsureShell(force) {
   document.body.appendChild(shell);
   document.documentElement.dataset.wreSkin = skin;
   ghBindShell(shell);
+  ghCatalogSignature = ''; // 骨架重建后目录要重新铺一遍
+  ghRenderCatalogTree(true);
   return shell;
 }
 
@@ -2795,6 +2882,7 @@ function ghSyncChromeInner(force) {
     }
   }
   ghSyncSidebarFits();
+  ghRenderCatalogTree();
 
   // 伪装态正文固定 GitHub 卡片色：暖色/米黄主题留在「按 G 退出伪装」时自己看。
   // 米黄卡片贴在灰白外壳上色块断层太明显，一眼就看得出不是网页。
