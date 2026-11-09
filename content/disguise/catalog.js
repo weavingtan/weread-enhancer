@@ -488,6 +488,23 @@ function ghShellHtmlGithub() {
       </div>
     </div>
 
+    <!-- 文件头：GitHub 文件视图在仓库条下面还有一行「路径 + 行数 + Copy」。
+         它是 fixed 覆盖层，不推正文；只有当正文上方真有这么多空白时才显示
+         （见 ghUpdateFilebarFit，宁可没有也不压字）。 -->
+    <div class="wre-gh-filebar">
+      <div class="wre-gh-filebar-inner">
+        <span class="wre-gh-filepath">
+          ${WRE_SVG.dir}<span>docs</span>
+          <span class="wre-gh-crumb-slash">/</span>
+          ${WRE_SVG.file}<span class="wre-gh-filebar-name">${WRE_GH_FILE}</span>
+        </span>
+        <div class="wre-gh-file-actions">
+          <span class="wre-gh-filebar-meta">—</span>
+          <button class="wre-gh-filebtn" data-copy="1">Copy</button>
+        </div>
+      </div>
+    </div>
+
     <aside class="wre-gh-sidebar">
       <div class="wre-gh-side-repo">
         <span class="wre-gh-side-avatar"></span>
@@ -585,6 +602,24 @@ function ghBindShell(shell) {
     });
   });
 
+  // 文件头的 Copy：真复制本章正文（GitHub 的 Copy 也是复制文件内容）
+  shell.querySelectorAll('[data-copy]').forEach((btn) => {
+    btn.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      const text = ghContentText();
+      if (!text) {
+        ghToast('没读到正文，稍后再试');
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(text);
+        ghToast(`已复制本章正文（${text.length} 字）`);
+      } catch (e) {
+        ghToast('复制失败：浏览器拒绝了剪贴板权限');
+      }
+    });
+  });
+
   // 顶栏假搜索框：文案写着 Type / to search，就必须真能搜（章节查找器）
   shell.querySelectorAll('.wre-gh-search, .wre-nb-search').forEach((box) => {
     box.addEventListener('click', (event) => {
@@ -622,6 +657,7 @@ function ghEnsureShell(force) {
   ghBindShell(shell);
   ghResetCatalogRender(); // 骨架重建后目录要重新铺一遍
   ghLastChapterFile = ''; // 骨架里的 file chip / 标题都是新 DOM，必须重写一遍
+  ghFilebarFitKey = ''; // 新骨架 = 新的文件头，空白要重新量
   ghRenderCatalogTree(true);
   return shell;
 }

@@ -416,7 +416,99 @@ function ghSyncChapterIdentity() {
   if (chip) chip.textContent = chapterText;
   const crumb = profile.crumbSelector ? document.querySelector(profile.crumbSelector) : null;
   if (crumb) crumb.textContent = chapterText;
+  const barName = document.querySelector('.wre-gh-filebar-name');
+  if (barName) barName.textContent = chapterText;
+  const barMeta = document.querySelector('.wre-gh-filebar-meta');
+  if (barMeta) barMeta.textContent = ghFilebarMetaText();
   ghApplyPageIdentity();
+}
+
+/* 文件头（GitHub 文件视图里「路径 + N lines + Copy」那一行）
+ *
+ * 它是个 fixed 覆盖层：不推正文，只在正文上方本来就有足够空白时才出现。
+ * 判据是「首行文字的顶边」与「文件头底边」的间距 —— 量不到（jsdom、
+ * 页面还在重渲染、或者已经滚到半截）就当作放不下，直接不显示。
+ * 这条项目铁律：宁可少一行假界面，也不能压住真正文。 */
+let ghFilebarFitKey = '';
+
+function ghContentText() {
+  const el = document.querySelector('.readerChapterContent');
+  if (!el) return '';
+  // innerText 才带换行（真实浏览器）；jsdom 里没有这个属性，退回 textContent
+  const text = typeof el.innerText === 'string' ? el.innerText : el.textContent || '';
+  return text.replace(/\r/g, '').trim();
+}
+
+// GitHub 那行是 "1,284 lines (1,020 loc) · 45.6 KB"：行数 / 字符数 / 体积
+function ghFilebarMetaText() {
+  const text = ghContentText();
+  if (!text) return '—';
+  const lines = text.split('\n').map((line) => line.trim()).filter(Boolean).length;
+  let size = 0;
+  try {
+    size = new Blob([text]).size;
+  } catch (e) {
+    size = text.length * 3; // 中文按 UTF-8 三字节估
+  }
+  const kb = (size / 1024).toFixed(1);
+  return `${lines.toLocaleString()} lines (${lines.toLocaleString()} loc) · ${kb} KB`;
+}
+
+function ghFilebarBottomPx() {
+  const rect = document.querySelector('.wre-gh-filebar')?.getBoundingClientRect?.();
+  if (rect && rect.height > 0) return rect.bottom;
+  const css = getComputedStyle(document.documentElement);
+  const top = parseFloat(css.getPropertyValue('--wre-gh-topbar-h')) || 48;
+  const repobar = parseFloat(css.getPropertyValue('--wre-gh-repobar-h')) || 44;
+  const filebar = parseFloat(css.getPropertyValue('--wre-gh-filebar-h')) || 40;
+  return top + repobar + filebar;
+}
+
+// 正文第一行文字的顶边（视口坐标）。翻页模式直接看 canvas 顶边。
+function ghFirstTextTop() {
+  if (ghIsDoubleColumn()) {
+    const rect = document.querySelector('.wr_canvasContainer canvas')?.getBoundingClientRect?.();
+    return rect && rect.height > 0 ? rect.top : null;
+  }
+  const scope = document.querySelector('.readerChapterContent') || document.querySelector('.app_content');
+  if (!scope || typeof document.createRange !== 'function') return null;
+
+  const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, null);
+  let inspected = 0;
+  while (walker.nextNode() && inspected < 40) {
+    const node = walker.currentNode;
+    if (!node.nodeValue || node.nodeValue.trim().length < 2) continue;
+    inspected += 1;
+    const range = document.createRange();
+    if (typeof range.getClientRects !== 'function') return null; // 非浏览器环境（jsdom）
+    try {
+      range.selectNodeContents(node);
+    } catch (e) {
+      continue;
+    }
+    const rects = range.getClientRects();
+    let top = Infinity;
+    for (let i = 0; i < rects.length; i += 1) {
+      const r = rects[i];
+      if (r.width > 8 && r.height > 4 && r.top < top) top = r.top;
+    }
+    if (Number.isFinite(top)) return top;
+  }
+  return null;
+}
+
+function ghUpdateFilebarFit(force) {
+  const key = `${ghSizeSignature()}|${ghCurrentChapterLabel()}`;
+  if (!force && key === ghFilebarFitKey) return;
+
+  const bottom = ghFilebarBottomPx();
+  const textTop = ghFirstTextTop();
+  const fits = Number.isFinite(textTop) && textTop >= bottom + 8;
+  document.documentElement.classList.toggle('wre-gh-filebar-ok', fits);
+  // 量不到（正文还没渲染 / 刚滚过 / 正在重排）就别把结果记进缓存，
+  // 否则一次「没量到」会让文件头到下次切章为止一直不出现。
+  ghFilebarFitKey = Number.isFinite(textTop) ? key : '';
+  log('info', '文件头可用空白', { textTop, bottom, fits });
 }
 
 function ghSyncChromeInner(force) {
@@ -474,6 +566,7 @@ function ghSyncChromeInner(force) {
   }
   ghRenderCatalogTree();
   ghSyncChapterIdentity();
+  ghUpdateFilebarFit();
 
   // 伪装态正文固定 GitHub 卡片色：暖色/米黄主题留在「按 G 退出伪装」时自己看。
   // 米黄卡片贴在灰白外壳上色块断层太明显，一眼就看得出不是网页。

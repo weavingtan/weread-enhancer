@@ -572,6 +572,7 @@ html.wre-scrollmode.wre-show-scrollbar #wre-custom-scrollbar {
 :root {
   --wre-gh-topbar-h: 48px;
   --wre-gh-repobar-h: 44px;
+  --wre-gh-filebar-h: 40px;
   --wre-gh-card-bg: #ffffff;
   --wre-gh-page-bg: #f6f8fa;
   --wre-gh-panel-bg: #ffffff;
@@ -1053,6 +1054,90 @@ html.wre-disguise.wre-gh-sidebar-ok .wre-gh-sidebar {
   display: block;
 }
 
+/* 文件头：GitHub 文件视图里「路径 · N lines · Copy」那一行。
+   它是 fixed 覆盖层、不推正文，只有 ghUpdateFilebarFit 判定正文上方真有这么多空白时才出现。
+   宁可少一行假界面，也不压住真正文。 */
+.wre-gh-filebar {
+  display: none;
+  position: fixed;
+  top: calc(var(--wre-gh-topbar-h) + var(--wre-gh-repobar-h));
+  left: 0;
+  right: 0;
+  height: var(--wre-gh-filebar-h);
+  background: var(--wre-gh-page-bg);
+  border-bottom: 1px solid var(--wre-gh-border);
+  z-index: 2147482999;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", "PingFang SC", sans-serif;
+}
+
+html.wre-gh-filebar-ok .wre-gh-filebar {
+  display: block;
+}
+
+.wre-gh-filebar-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 1280px;
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 24px;
+  font-size: 13px;
+  color: var(--wre-gh-fg-muted);
+}
+
+.wre-gh-filepath {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.wre-gh-filepath .wre-gh-ico {
+  width: 14px;
+  height: 14px;
+}
+
+.wre-gh-filebar-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 600;
+  color: var(--wre-gh-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wre-gh-file-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.wre-gh-filebar-meta {
+  font-size: 12px;
+}
+
+.wre-gh-filebtn {
+  padding: 2px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--wre-gh-fg);
+  background: var(--wre-gh-panel-bg);
+  border: 1px solid var(--wre-gh-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.wre-gh-filebtn:hover {
+  background: var(--wre-gh-hover-bg);
+}
+
+/* 侧栏要给文件头让位（文件头只在有空白时才显示，所以这里的位移也是条件性的） */
+html.wre-gh-filebar-ok .wre-gh-sidebar {
+  top: calc(var(--wre-gh-topbar-h) + var(--wre-gh-repobar-h) + var(--wre-gh-filebar-h));
+}
+
 .wre-gh-sidebar {
   display: none;
   position: fixed;
@@ -1229,6 +1314,7 @@ html.wre-disguise.wre-double-column .wre-gh-side-search kbd {
 html[data-wre-skin="notion"] {
   --wre-gh-topbar-h: 44px;
   --wre-gh-repobar-h: 0px;
+  --wre-gh-filebar-h: 0px; /* Notion 没有文件头这一行 */
   --wre-gh-card-bg: #ffffff;
   --wre-gh-page-bg: #ffffff;
   --wre-gh-panel-bg: #f7f7f5;
