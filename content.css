@@ -850,7 +850,8 @@ html.wre-disguise #wre-gh-shell {
   background: var(--wre-gh-panel-bg);
 }
 
-/* 伪分页条：容器铺满底部两侧，Previous 在左、Next 在右（像翻页热区）。
+/* 伪分页条：左右边缘由 JS（ghAlignPagerToCard）对齐到正文卡片，Previous 贴卡片左边、
+ * Next 贴卡片右边。这里的 32px 只是 JS 量到之前的兜底。
  * 容器本身不接收点击，否则会挡住正文的选中/划线。 */
 .wre-gh-pager {
   display: none;
@@ -863,10 +864,6 @@ html.wre-disguise #wre-gh-shell {
   justify-content: space-between;
   pointer-events: none;
   user-select: none;
-}
-/* 侧栏出现时把 Previous 让到侧栏右边，别浮在文件树上 */
-html.wre-disguise.wre-gh-sidebar-ok .wre-gh-pager {
-  left: calc(var(--wre-gh-sidebar-w) + 32px);
 }
 html.wre-disguise.wre-double-column .wre-gh-pager,
 html.wre-disguise .wre-gh-pager.wre-pager-visible {

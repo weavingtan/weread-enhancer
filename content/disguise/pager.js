@@ -91,6 +91,22 @@ function ghClickChapterNav(dir) {
 
 let ghPagerRaf = null;
 
+// 分页条贴着正文卡片的左右边缘，而不是贴视口边缘：
+// Previous 的左边缘对齐卡片左边、Next 的右边缘对齐卡片右边（大屏卡片居中时才不会「Next 飘在灰色空地里」）。
+function ghAlignPagerToCard(pager) {
+  const card = document.querySelector('.readerChapterContent');
+  const vw = document.documentElement.clientWidth || window.innerWidth;
+  if (!card) {
+    pager.style.left = '';
+    pager.style.right = '';
+    return;
+  }
+  const rect = card.getBoundingClientRect();
+  if (!rect || rect.width <= 0) return;
+  pager.style.left = `${Math.max(8, Math.round(rect.left))}px`;
+  pager.style.right = `${Math.max(8, Math.round(vw - rect.right))}px`;
+}
+
 function ghUpdatePager() {
   ghPagerRaf = null;
   const pager = document.querySelector('.wre-gh-pager');
@@ -99,6 +115,7 @@ function ghUpdatePager() {
     pager.classList.remove('wre-pager-visible');
     return;
   }
+  ghAlignPagerToCard(pager);
   if (ghIsDoubleColumn()) {
     pager.classList.add('wre-pager-visible');
     return;

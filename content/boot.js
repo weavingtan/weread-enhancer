@@ -152,6 +152,8 @@ async function init() {
   // 滚动 / 尺寸变化时更新自绘滚动条的位置与高度
   window.addEventListener('scroll', updateCustomScrollbar, { passive: true });
   window.addEventListener('resize', updateCustomScrollbar);
+  // 卡片宽度随窗口/屏占比变化时，分页条要重新对齐卡片边缘
+  window.addEventListener('resize', ghOnPagerScroll);
 
   // 监听全屏变化（Esc 键或浏览器按钮退出全屏时恢复屏占比）
   document.addEventListener('fullscreenchange', handleFullscreenChange);
