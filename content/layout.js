@@ -49,6 +49,7 @@ body.wre-toolbar-floating.wre-show-controls [class*="readerControls"] {
   pointer-events: auto !important;
 }`;
 
+// 沉浸模式 CSS（放在 toolbarFloatCSS 之后，同优先级下按源顺序覆盖其隐藏规则）
 const immersiveCSS = `
 html.wre-immersive .readerTopBar,
 html.wre-immersive [class*="readerTopBar"],
@@ -271,6 +272,8 @@ function pinControls() {
   return true;
 }
 
+// 官方「目录 / 搜索」抽屉打开时会盖住屏幕顶部；此时必须让出顶栏，
+// 否则浮动顶栏（z-index 高于官方抽屉）会压住抽屉顶部的搜索框，导致点不到。
 function isOfficialPanelAtTop() {
   // 插件自己的界面（悬浮球 / 弹窗）不算，统一以 wre- 前缀判据
   const isOwnUI = (el) => {

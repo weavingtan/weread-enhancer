@@ -10,6 +10,12 @@ function hexToRgb(hex) {
   ];
 }
 
+// 微信读书滚动模式正文由 canvas 渲染。系统深浅色切换时它在翻转 body class 之前
+// 就按旧文字色画好了 canvas，之后不再重绘，也不响应 resize/display 切换——
+// CSS 无法修正已画好的位图，只能读取像素分析后直接改写
+
+// 收集正文 canvas。优先精确选择器；微信读书改版可能更换类名导致选择器静默失效，
+// 匹配不到时退化为 reader 容器内的全部 canvas（按尺寸过滤图标类小 canvas）
 function collectReaderCanvases() {
   let canvases = document.querySelectorAll(
     '.readerChapterContent canvas, .renderTargetContent canvas, .wr_canvasContainer canvas'

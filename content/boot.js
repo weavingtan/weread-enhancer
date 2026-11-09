@@ -45,6 +45,8 @@ async function applySavedScreenRatioOnInit() {
   return false;
 }
 
+// 5 秒内重复加载 = 页面真的被重新载入（而不是重排造成的视觉闪烁），
+// 排查「刷新后页面又刷新一次」时，这一行能直接区分两者。
 function wreTrackBoot() {
   try {
     const KEY = 'wre-boot-at';

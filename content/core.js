@@ -90,6 +90,9 @@ function triggerWereadLayoutReflow(reason) {
   }
 }
 
+// 官方划线层（.wr_underline_wrapper）在正文之后才渲染，且只在 resize 时按当前宽度重算坐标。
+// 插件改过正文宽度后，如果划线层先于/晚于这次重排渲染，就会出现「打开书籍划线错位、刷新才正常」。
+// 这里等划线层真正出现后再补一次重排，让官方按插件宽度重新计算划线坐标。
 function scheduleUnderlineLayerReflow(reason) {
   // 屏占比 100% 时正文宽度与微信读书原生完全一致，划线坐标不需要重算；
   // 这时候再补派 resize 只会让微信读书把整块正文重新渲染一遍

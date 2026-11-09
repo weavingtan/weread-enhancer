@@ -9,6 +9,9 @@ const GH_CATALOG_SCOPES = [
   '[class*="catalog"]',
 ];
 
+// 从微信读书目录 DOM 里取章节项；取不到返回空数组，调用方回退静态假树。
+// 章节名固定是 .readerCatalog_list_item_title_text（a.html 实测每章一个），
+// 直接按它取最稳：笼统按 li/[class*=item] 取会把行内 meta（「当前读到 40%」「书签」）也算成章节。
 function ghCollectCatalogItems() {
   for (const sel of GH_CATALOG_SCOPES) {
     const root = document.querySelector(sel);

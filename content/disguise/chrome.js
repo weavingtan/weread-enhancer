@@ -70,7 +70,10 @@ const GH_NATIVE_PAGER_TEXTS = ['上一页', '下一页', '上一章', '下一章
 
 let ghLastPagerSweep = 0;
 
-const GH_SIDEBAR_MIN_W = 120;
+/* 双栏（Canvas 位图）放侧栏：正文一个像素都不动，把侧栏直接盖在书页左侧的页边空白上。
+ * 空白宽度靠读 canvas 像素实测（找第一列有墨迹的 x），侧栏宽度随之自适应；
+ * 宁可窄也不压字 —— 留白不够就直接不显示。 */
+const GH_SIDEBAR_MIN_W = 120; // 窄于这个宽度，文件树没有意义
 
 const GH_SIDEBAR_MAX_W = 248;
 
@@ -175,6 +178,10 @@ function ghClearSidebarFits() {
   }
 }
 
+// 侧栏能不能站住，统一按「正文左侧的真实留白」判断：
+// - 双栏：读 Canvas 像素，找书页页边距；
+// - 滚动模式：正文被 CSS 收窄到 280px 之后量 .app_content；
+// - 单栏翻页：正文定宽居中，只能吃页边留白，量 .readerChapterContent。
 function ghSyncSidebarFits() {
   if (!document.querySelector('.wre-gh-sidebar')) return;
 
@@ -219,6 +226,8 @@ function ghHideNativePager() {
   });
 }
 
+// 防重入 + 状态签名去重：观察器回调里调用的样式同步必须幂等，
+// 否则会在「我方改 class → 观察器触发 → 再改 class」之间形成死循环（主线程卡死）。
 let ghSyncing = false;
 
 let ghChromeSignature = '';
@@ -279,6 +288,7 @@ function ghSyncChromeInner(force) {
     document.documentElement.classList.toggle('wre-double-column', isDouble);
     document.documentElement.classList.toggle('wre-gh-scroll', isScroll);
     if (wasDouble !== isDouble) {
+      // 只派发一次：以前这里「立即 schedule + 100ms 再 resize」会连排两遍，画面连闪两下。
       // 模式切换后让微信读书按新容器宽度重排（尤其双栏 Canvas）。
       // 1.2s 内只允许一次：重排期间 canvas 会短暂 0 尺寸，来回翻转会连锁触发，
       // 表现就是拖一下窗口「连刷两下」。被吞掉的那次用 trailing 定时器补上，

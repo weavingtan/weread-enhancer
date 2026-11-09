@@ -51,6 +51,8 @@ const WRE_DARK_TEXT = '#d4d4d4';
 
 const WRE_LIGHT_TEXT = '#333333';
 
+// rgb 为 null 表示「系统默认」：撤除插件配色，微信读书原生外观接管。
+// 每个模式（light/dark）清单的首个主题即该模式的默认状态
 const WRE_BG_COLORS = [
   { name: '系统默认', rgb: null, type: 'light' },
   { name: 'Claude 暖白', rgb: '#FAF5EE', type: 'light' },
@@ -92,6 +94,7 @@ function isWereadDarkMode() {
   return !document.body.classList.contains('wr_whiteTheme');
 }
 
+// 双栏模式（翻页）：按钮 class 为 isHorizontalReader；文字由 Canvas 渲染，CSS color 无法影响
 function isDoubleColumnMode() {
   return !!document.querySelector('.readerControls_item.isHorizontalReader');
 }
@@ -106,6 +109,7 @@ function getBgAvailableColors(forceDark) {
   return WRE_BG_COLORS.filter((c) => (isDark && c.type === 'dark') || (!isDark && c.type === 'light'));
 }
 
+// 当前主题在可用清单中的索引（按对象身份匹配：「系统默认」浅/深各一个，按名称会恒命中浅色那个）
 function getCurrentBgColorIndex() {
   const available = getBgAvailableColors();
   const current = WRE_BG_COLORS[wreBgIdx];
@@ -113,6 +117,8 @@ function getCurrentBgColorIndex() {
   return idx >= 0 ? idx : 0;
 }
 
+// 切换主题：写运行时索引并持久化到主题所属模式的键（归属由主题 type 决定而非 body class——
+// 系统切换过渡期 body class 是旧值，读它会写错键）
 function setActiveBgIdx(idx) {
   const theme = WRE_BG_COLORS[idx];
   if (!theme) return;
