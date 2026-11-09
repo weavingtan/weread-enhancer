@@ -246,7 +246,9 @@ let ghTopbarH = '';
 function ghSizeSignature() {
   const canvas = document.querySelector('.wr_canvasContainer canvas');
   const c = canvas ? `${canvas.width}x${canvas.height}` : 'none';
-  return `${window.innerWidth}x${window.innerHeight}|${c}`;
+  // 屏占比也要进签名：滚动模式下正文宽度按视口百分比走，窗口尺寸没变但
+  // .app_content 的 left 变了，侧栏留白必须重算，否则会按旧留白盖住正文。
+  return `${window.innerWidth}x${window.innerHeight}|${c}|${WRE_STATE.screenRatio}`;
 }
 
 function ghSyncChromeInner(force) {

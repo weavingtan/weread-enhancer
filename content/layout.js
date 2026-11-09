@@ -7,6 +7,9 @@ function ensureStyleTag() {
     return;
   }
 
+  // 接管 / 重建标签时作废写入缓存：新标签里并没有之前那份 CSS，
+  // 不清缓存的话 updateStyleTag 会「以为已经写过」而跳过，样式就丢了。
+  wreLastWrittenCss = '';
   const existing = Array.from(document.querySelectorAll('#we-read-enhancer-style'));
   if (existing.length > 0) {
     wreStyleTag = existing[existing.length - 1];
