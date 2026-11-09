@@ -61,8 +61,9 @@ function scheduleWereadLayoutReflow(reason) {
 function triggerWereadLayoutReflow(reason) {
   try {
     void document.body?.offsetHeight;
+    // 只派发 resize：orientationchange 会让微信读书当成「设备旋转」走一遍完整重排，
+    // 视觉上就是页面内容整块闪一下（用户感知为「又刷新了一次」）。
     window.dispatchEvent(new Event('resize'));
-    window.dispatchEvent(new Event('orientationchange'));
     log('info', '已触发页面重排', { reason });
   } catch (error) {
     log('warn', '触发页面重排失败', { reason, error: String(error) });
@@ -97,9 +98,8 @@ function scheduleUnderlineLayerReflow(reason) {
       wreUnderlineReflowTimer = null;
     }
     scheduleWereadLayoutReflow(`${reason}:${tag}`);
-    // 官方划线层可能分多帧铺开，错开时间再补两次，确保坐标最终按插件宽度重算
+    // 官方划线层可能分多帧铺开，再补一次即可（原来还补到 2500ms，一天三次 resize 会连闪三下）
     window.setTimeout(() => scheduleWereadLayoutReflow(`${reason}:${tag}-late1`), 700);
-    window.setTimeout(() => scheduleWereadLayoutReflow(`${reason}:${tag}-late2`), 2500);
   };
 
   if (document.querySelector('.wr_underline_wrapper')) {
@@ -2198,13 +2198,13 @@ async function applySavedScreenRatioOnInit() {
 
     if (ready) {
       const applied = applyScreenRatio(ratio);
-      scheduleWereadLayoutReflow('init-apply');
+      // 重排统一由 scheduleUnderlineLayerReflow 负责（它本来就要等划线层渲染完再算一次坐标），
+      // 这里不再单独派发 resize —— 刷新时多次 resize 会让正文整块闪，像「又刷新了一次」。
       scheduleUnderlineLayerReflow('init-apply');
       log('info', '已在刷新后自动应用已保存的屏占比', applied);
       // 兜底：稍后再应用一次，防止早期模式判定/渲染时机偏差（如 app_content 晚于正文出现）
       setTimeout(() => {
         applyScreenRatio(WRE_STATE.screenRatio);
-        scheduleWereadLayoutReflow('init-apply-2');
         log('info', '屏占比二次兜底应用', { ratio: WRE_STATE.screenRatio, scrollMode: detectScrollMode() });
       }, 800);
       return true;
@@ -2215,11 +2215,9 @@ async function applySavedScreenRatioOnInit() {
 
   // 兜底：即使没判定「就绪」也强制应用一次（CSS 幂等；微信读书加载慢时也能补上）
   const applied = applyScreenRatio(ratio);
-  scheduleWereadLayoutReflow('init-apply-fallback');
   scheduleUnderlineLayerReflow('init-apply-fallback');
   setTimeout(() => {
     applyScreenRatio(WRE_STATE.screenRatio);
-    scheduleWereadLayoutReflow('init-apply-fallback-2');
   }, 1200);
   log('warn', '刷新后未判定就绪，已兜底应用屏占比', { ratio, applied });
   return false;
@@ -2791,9 +2789,9 @@ function ghSyncChromeInner(force) {
     document.documentElement.classList.toggle('wre-double-column', isDouble);
     document.documentElement.classList.toggle('wre-gh-scroll', isScroll);
     if (wasDouble !== isDouble) {
-      // 模式切换后需让微信读书按新容器宽度重排（尤其双栏 Canvas）
-      scheduleWereadLayoutReflow('gh-mode-switch');
-      setTimeout(() => window.dispatchEvent(new Event('resize')), 100);
+      // 模式切换后让微信读书按新容器宽度重排（尤其双栏 Canvas）。
+      // 只派发一次：以前这里「立即 schedule + 100ms 再 resize」会连排两遍，画面连闪两下。
+      setTimeout(() => triggerWereadLayoutReflow('gh-mode-switch'), 120);
     }
   }
   ghSyncSidebarFits();
@@ -2981,14 +2979,14 @@ function ghSetActive(on) {
     ghApplyPageIdentity();
     ghUpdatePager();
     scheduleWereadLayoutReflow('gh-disguise-on');
-    // 阅读器 DOM 可能晚于 content script 就绪：延后补一次屏占比 + 侧栏测量
+    // 阅读器 DOM 可能晚于 content script 就绪：延后补一次屏占比 + 侧栏测量。
+    // 滚动模式改宽度浏览器会自动重排，不需要再惊动微信读书（否则会整块闪一下）。
     setTimeout(() => {
       applyScreenRatio(WRE_STATE.screenRatio);
-      scheduleWereadLayoutReflow('gh-ratio-retry');
+      if (!detectScrollMode()) scheduleWereadLayoutReflow('gh-ratio-retry');
       ghSyncSidebarFits();
       ghHideNativePager();
     }, 1200);
-    setTimeout(() => window.dispatchEvent(new Event('resize')), 100);
 
     if (!ghBodyObserver) {
       // 只观察 body（微信读书会翻转 wr_whiteTheme），不观察 html 自身——
