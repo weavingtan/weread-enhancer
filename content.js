@@ -2419,8 +2419,12 @@ function ghCollectCatalogItems() {
   return [];
 }
 
+// 当前章高亮：标记通常落在最外层行（readerCatalog_list_item）上，节点自己身上不一定有
 function ghCatalogActiveIndex(items) {
-  return items.findIndex((el) => /active|current|selected/i.test(String(el.className || '')));
+  return items.findIndex((el) => {
+    const row = el.closest?.('.readerCatalog_list_item') || el;
+    return /active|current|selected/i.test(`${el.className || ''} ${row.className || ''}`);
+  });
 }
 
 // 章节名 → 文件名：`01 开篇.md`，过长截断，避免侧栏换行
@@ -2435,65 +2439,97 @@ let ghCatalogSignature = '';
 let ghLastCatalogScan = 0;
 let ghCatalogRefs = [];
 
+// 目录面板关着时，整棵 .readerCatalog 是 display:none（实测 0x0），里面的行也跟着 0 尺寸。
+// 点击处理器往往只在「行是可见元素」时才算数，所以派发事件前临时让面板按正常尺寸上屏，
+// 派发完立刻还原 —— 既不改伪装样式，也不会真的把原生目录留在画面上。
+const GH_CATALOG_REVEAL_PROPS = [
+  'display', 'visibility', 'opacity', 'pointer-events',
+  'position', 'left', 'top', 'width', 'max-height', 'overflow', 'z-index',
+];
+
+function ghRevealCatalogRoot() {
+  const root = document.querySelector('.readerCatalog') || document.querySelector('[class*="catalog"]');
+  if (!root) return null;
+  const rect = root.getBoundingClientRect();
+  if (rect.width > 0 && rect.height > 0) return null; // 本来就开着
+  const saved = GH_CATALOG_REVEAL_PROPS.map((prop) => [
+    prop, root.style.getPropertyValue(prop), root.style.getPropertyPriority(prop),
+  ]);
+  const set = (prop, value) => root.style.setProperty(prop, value, 'important');
+  set('display', 'block');
+  set('visibility', 'visible');
+  set('opacity', '1');
+  set('pointer-events', 'auto');
+  set('position', 'fixed');
+  set('left', '0');
+  set('top', '0');
+  set('width', '320px');
+  set('max-height', '80vh');
+  set('overflow', 'auto');
+  set('z-index', '2147483647');
+  return () => {
+    saved.forEach(([prop, value, priority]) => {
+      if (value) root.style.setProperty(prop, value, priority);
+      else root.style.removeProperty(prop);
+    });
+  };
+}
+
 // 目录项点击：微信读书的目录项不一定吃裸 .click()，把指针事件按序补一遍，
-// 并连同最近的可点祖先（li / [class*=item]）一起试，它们的点击处理器常挂在父层。
+// 并连同所有可点的行祖先一起试：真实结构是
+// readerCatalog_list_item > readerCatalog_list_item_title > _title_text，
+// 而 _title 的类名里也含 list_item，单靠 closest 只会停在中间层，所以逐层往上收。
 function ghActivateCatalogItem(el) {
   if (!el) return;
   const targets = [el];
-  // 真实结构：readerCatalog_list_item > _title > _title_text，点击处理器挂在最外层行上
-  const row = el.closest('[class*="list_item"], li');
-  if (row && row !== el) targets.push(row);
-  targets.forEach((node) => {
-    // 有些控件要先 hover / focus 才挂上处理器，按真实操作顺序补全事件
-    ['mouseover', 'mouseenter', 'mousemove'].forEach((type) => {
-      node.dispatchEvent(new MouseEvent(type, { bubbles: type !== 'mouseenter', cancelable: true }));
+  for (let node = el.parentElement; node && node !== document.body; node = node.parentElement) {
+    const cls = String(node.className || '');
+    if (node.tagName === 'LI' || /list_item/i.test(cls)) targets.push(node);
+  }
+  const restore = ghRevealCatalogRoot();
+  try {
+    targets.forEach((node) => {
+      // 有些控件要先 hover / focus 才挂上处理器，按真实操作顺序补全事件
+      ['mouseover', 'mouseenter', 'mousemove'].forEach((type) => {
+        node.dispatchEvent(new MouseEvent(type, { bubbles: type !== 'mouseenter', cancelable: true }));
+      });
+      try {
+        node.dispatchEvent(new PointerEvent('pointerdown', {
+          bubbles: true, cancelable: true, pointerType: 'mouse', isPrimary: true,
+        }));
+      } catch (e) { /* 不支持 PointerEvent 就只发鼠标事件 */ }
+      try { node.focus?.({ preventScroll: true }); } catch (e) { /* 不可聚焦就跳过 */ }
+      node.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      try { node.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true })); } catch (e) { /* 同上 */ }
+      node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+      node.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      node.click();
     });
-    try {
-      node.dispatchEvent(new PointerEvent('pointerdown', {
-        bubbles: true, cancelable: true, pointerType: 'mouse', isPrimary: true,
-      }));
-    } catch (e) { /* 不支持 PointerEvent 就只发鼠标事件 */ }
-    try { node.focus?.({ preventScroll: true }); } catch (e) { /* 不可聚焦就跳过 */ }
-    node.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-    try { node.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true })); } catch (e) { /* 同上 */ }
-    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-    node.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-    node.click();
-  });
+  } finally {
+    restore?.();
+  }
 }
 
 const ghSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// 「当前在第几章」的信号：优先原生顶栏章名，没有就退回正文首段（换章一定会变）
+// 「当前在第几章」的信号：顶栏只有书名（readerTopBar_title_link，换章也不变），
+// 拿它当判据会永远判成「没换」—— 所以指纹取正文开头，没有正文才退回目录高亮项/顶栏章名。
 function ghChapterTitleText() {
-  const bar = document.querySelector('.readerTopBar_title_chapter')
-    || document.querySelector('[class*="readerTopBar_title"]');
-  const text = (bar?.textContent || '').trim();
-  if (text) return text;
-  const para = document.querySelector('.readerChapterContent p, .app_content p');
-  return (para?.textContent || '').trim().slice(0, 40);
-}
-
-// 微信读书的目录入口：优先「文字/aria 里写了目录」的控件，最后退回顶栏章名
-function ghCatalogPanelToggle() {
-  const nodes = Array.from(document.querySelectorAll(
-    '.readerControls_item, [class*="readerControls"] [class*="item"], [aria-label], [title]'
-  ));
-  const byText = nodes.find((el) => /目录|catalog|contents/i.test(
-    `${el.className} ${el.getAttribute('aria-label') || ''} ${el.getAttribute('title') || ''} ${el.textContent || ''}`
-  ));
-  if (byText) return byText;
-  return document.querySelector('.readerTopBar_title_chapter')
-    || document.querySelector('[class*="readerTopBar_title"]');
-}
-
-// 面板是否真的开了：看目录项自身有没有尺寸（比摸容器 class 靠谱）
-function ghCatalogPanelVisible() {
+  const scope = document.querySelector('.readerChapterContent') || document.querySelector('.app_content');
+  const text = String(scope?.innerText || '').replace(/\s+/g, ' ').trim();
+  if (text) return text.slice(0, 60);
   const items = ghCollectCatalogItems();
-  return items.some((el) => {
-    const rect = el.getBoundingClientRect();
-    return rect.width > 0 && rect.height > 0;
-  });
+  const idx = ghCatalogActiveIndex(items);
+  if (idx >= 0) return (items[idx].textContent || '').trim();
+  const bar = document.querySelector('.readerTopBar_title_chapter');
+  return (bar?.textContent || '').trim();
+}
+
+function ghCatalogRootSize() {
+  const root = document.querySelector('.readerCatalog') || document.querySelector('[class*="catalog"]');
+  if (!root) return '(无面板)';
+  const rect = root.getBoundingClientRect();
+  return `${Math.round(rect.width)}x${Math.round(rect.height)}`;
 }
 
 async function ghWaitChapterChange(before, timeout) {
@@ -2505,35 +2541,33 @@ async function ghWaitChapterChange(before, timeout) {
   return false;
 }
 
-// 跳章：先直接点目录项；没反应说明目录是「面板未打开时的静态副本」，
-// 打开原生目录面板（伪装态下不可见）再点一次。返回 { ok, report } 便于把卡点告诉用户。
+// 跳章：点击处理器挂在外层行上，面板关着时整棵目录还是 0 尺寸，
+// 所以按「点章节名 → 按章节名重取节点 → 点最外层行」逐级重试，
+// 每次都用正文指纹确认是否真的换了章。返回 { ok, report } 便于把卡点告诉用户。
 async function ghJumpToCatalogEntry(node, label) {
   const report = [];
   const before = ghChapterTitleText();
-  ghActivateCatalogItem(node);
-  if (!before) return { ok: true, report };
-  if (await ghWaitChapterChange(before, 500)) return { ok: true, report };
+  const attempt = async (target, tag) => {
+    if (!target) return false;
+    ghActivateCatalogItem(target);
+    if (!before) return true; // 没有指纹可判，只能当成功（同原有行为）
+    const ok = await ghWaitChapterChange(before, 600);
+    report.push(`${tag}${ok ? '成功' : '无效'}`);
+    return ok;
+  };
 
-  report.push('直接点无效');
-  const toggle = ghCatalogPanelToggle();
-  if (!toggle) return { ok: false, report: [...report, '没找到目录按钮'] };
+  if (await attempt(node, '点章节名')) return { ok: true, report };
 
-  // 伪装态下原生工具栏是 pointer-events:none，直接 .click() 不够，补全套指针事件
-  ghActivateCatalogItem(toggle);
-  await ghSleep(450);
-  const panelOpen = ghCatalogPanelVisible();
   const items = ghCollectCatalogItems();
-  report.push(`面板${panelOpen ? '已开' : '未开'}·${items.length}项·按钮${String(toggle.className || toggle.tagName).slice(0, 20)}`);
+  const fresh = items.find((el) => (el.textContent || '').trim() === label);
+  if (fresh && fresh !== node && await attempt(fresh, '重取节点')) return { ok: true, report };
 
-  const target = items.find((el) => (el.textContent || '').trim() === label);
-  if (!target) {
-    if (ghCatalogPanelVisible()) toggle.click();
-    return { ok: false, report: [...report, '面板里没有该章'] };
-  }
-  ghActivateCatalogItem(target);
-  const ok = await ghWaitChapterChange(before, 800);
-  if (ghCatalogPanelVisible()) toggle.click();
-  return { ok, report: [...report, ok ? '面板点成功' : '面板点无效'] };
+  const anchor = fresh || node;
+  const row = anchor?.closest?.('.readerCatalog_list_item') || anchor?.closest?.('[class*="list_item"]');
+  if (row && await attempt(row, '点整行')) return { ok: true, report };
+
+  report.push(`面板${ghCatalogRootSize()}·${items.length}项`);
+  return { ok: false, report };
 }
 
 function ghRenderCatalogTree(force) {
@@ -2606,7 +2640,11 @@ function ghDumpVisibleLeaves(scope, limit) {
     if (rect.width <= 0 || rect.height <= 0) continue;
     if (Array.from(el.children).some((child) => child.tagName.toLowerCase() !== 'svg')) continue; // 只看叶子
     const label = el.getAttribute('aria-label') || el.getAttribute('title') || el.dataset?.id || '';
-    rows.push(`${el.tagName.toLowerCase()}.${String(el.className || '').trim()}｜${(el.textContent || '').trim().slice(0, 8)}｜${label}｜${Math.round(rect.x)},${Math.round(rect.y)} ${Math.round(rect.width)}x${Math.round(rect.height)}`);
+    // 修饰类（showBookReviews / fontSizeButton / dark / 目录）挂在按钮上而不是图标上，
+    // 所以叶子节点旁边要带上父层类名，否则只看到一排一模一样的 span.icon
+    const parent = el.parentElement;
+    const parentCls = parent && parent !== scope ? `${parent.tagName.toLowerCase()}.${String(parent.className || '').trim()}` : '';
+    rows.push(`${el.tagName.toLowerCase()}.${String(el.className || '').trim()}｜${(el.textContent || '').trim().slice(0, 8)}｜${label}｜${Math.round(rect.x)},${Math.round(rect.y)} ${Math.round(rect.width)}x${Math.round(rect.height)}｜⇧${parentCls}`);
     if (rows.length >= limit) break;
   }
   return rows.join('\n') || '(empty)';
