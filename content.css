@@ -846,10 +846,15 @@ html.wre-disguise #wre-gh-shell {
   left: 32px;
   right: 32px;
   bottom: 24px;
-  z-index: 2147482997;
+  /* 必须高于左侧文件树（2147482998），否则 Previous 会被侧栏整块盖住 */
+  z-index: 2147483001;
   justify-content: space-between;
   pointer-events: none;
   user-select: none;
+}
+/* 侧栏出现时把 Previous 让到侧栏右边，别浮在文件树上 */
+html.wre-disguise.wre-gh-sidebar-ok .wre-gh-pager {
+  left: calc(var(--wre-gh-sidebar-w) + 32px);
 }
 html.wre-disguise.wre-double-column .wre-gh-pager,
 html.wre-disguise .wre-gh-pager.wre-pager-visible {
