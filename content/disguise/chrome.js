@@ -81,41 +81,64 @@ let ghSidebarVisualW = '';
 
 let ghInkCache = { key: '', left: null };
 
+// 读像素必须走自建的 willReadFrequently 离屏画布：微信读书已经先用普通属性取过 2D 上下文，
+// 我们再用 canvas.getContext('2d', { willReadFrequently: true }) 拿到的还是同一个上下文，
+// 属性不生效，于是 Chrome 照样报「Multiple readback operations…」。
+let ghInkBuf = null;
+let ghInkBufCtx = null;
+
+function ghInkBuffer(w, h) {
+  if (!ghInkBuf) ghInkBuf = document.createElement('canvas');
+  if (ghInkBuf.width !== w || ghInkBuf.height !== h) {
+    ghInkBuf.width = w;
+    ghInkBuf.height = h;
+  }
+  if (!ghInkBufCtx) {
+    try {
+      ghInkBufCtx = ghInkBuf.getContext('2d', { willReadFrequently: true });
+    } catch (e) {
+      return null;
+    }
+  }
+  return ghInkBufCtx;
+}
+
 function ghCanvasInkLeft(canvas, rect) {
   if (!canvas.width || !canvas.height || !rect.width) return null;
   const scale = canvas.width / rect.width;
   if (!Number.isFinite(scale) || scale <= 0) return null;
-  let ctx = null;
-  try {
-    ctx = canvas.getContext('2d', { willReadFrequently: true });
-  } catch (e) {
-    return null;
-  }
-  if (!ctx) return null;
 
   // 大屏双栏正文居中，页边距可能落在 300px 开外：扫描范围放宽到 600 CSS px
   const scanW = Math.max(1, Math.min(canvas.width, Math.round(Math.min(rect.width, 600) * scale)));
   const stepY = Math.max(1, Math.round(10 * scale)); // 每 10 CSS px 采一行
   const startY = Math.round(canvas.height * 0.05);   // 避开顶部装饰
   const endY = Math.round(canvas.height * 0.92);     // 避开底部进度
-  let bg = null;
-  try {
-    bg = ctx.getImageData(1, 1, 1, 1).data;
-  } catch (e) {
-    return null;
-  }
-  const transparentBg = bg[3] < 12;
 
-  // 逐行 getImageData 会触发 Chrome 的「Multiple readback operations…」警告，
-  // 而且每次读回都要同步 CPU。改成一次读回 8 行的条带，读回次数降到原来的 1/8。
+  // 一次搬 8 行的条带进离屏画布再读回：读回次数降到 1/8，且画布带 willReadFrequently
   const rowsPerChunk = 8;
+  const bufH = stepY * rowsPerChunk;
+  const bctx = ghInkBuffer(scanW, bufH);
+  if (!bctx) return null;
+
+  let bg = null;
+  let transparentBg = false;
+  let first = true;
   for (let y = startY; y < endY; y += stepY * rowsPerChunk) {
     const chunkH = Math.min(stepY * rowsPerChunk, endY - y);
     let block = null;
     try {
-      block = ctx.getImageData(0, y, scanW, chunkH).data;
+      bctx.clearRect(0, 0, scanW, bufH);
+      bctx.drawImage(canvas, 0, y, scanW, chunkH, 0, 0, scanW, chunkH);
+      block = bctx.getImageData(0, 0, scanW, chunkH).data;
     } catch (e) {
       return null;
+    }
+    if (first) {
+      // 背景色取条带里的 (1, 0)：对应画布 (1, y)，和原来 (1, 1) 的含义一致
+      const bgi = (scanW > 1 ? 1 : 0) * 4;
+      bg = [block[bgi], block[bgi + 1], block[bgi + 2], block[bgi + 3]];
+      transparentBg = bg[3] < 12;
+      first = false;
     }
     for (let ry = 0; ry < chunkH; ry += stepY) {
       const rowOffset = ry * scanW * 4;
