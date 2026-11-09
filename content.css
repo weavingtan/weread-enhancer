@@ -607,6 +607,13 @@ html.wre-disguise [class*="readerBottom"] {
 html.wre-disguise .renderTargetPageInfo_header {
   display: none !important;
 }
+/* 原生目录面板：脚本跳章得把它真的打开（关着时整棵 display:none、行 0 尺寸点不动），
+ * 但打开的过程不能被看见——只抹掉视觉与鼠标事件，布局尺寸照旧保留 */
+html.wre-disguise .readerCatalog,
+html.wre-disguise [class*="readerCatalog"] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
 /* 悬浮球在伪装态完全隐藏（可疑） */
 html.wre-disguise #we-read-enhancer-root .wre-fab {
   display: none !important;

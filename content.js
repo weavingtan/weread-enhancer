@@ -2479,32 +2479,38 @@ function ghRevealCatalogRoot() {
 // 并连同所有可点的行祖先一起试：真实结构是
 // readerCatalog_list_item > readerCatalog_list_item_title > _title_text，
 // 而 _title 的类名里也含 list_item，单靠 closest 只会停在中间层，所以逐层往上收。
-function ghActivateCatalogItem(el) {
+// 模拟一次真实点击：微信读书的控件不吃裸 .click()，把指针事件按真实顺序补一遍，
+// 顺带 hover/focus（有些控件要先 hover 才挂处理器）。伪装态下这些控件是
+// pointer-events:none，合成事件不受影响，所以照样能触发。
+function ghDispatchClick(node) {
+  if (!node) return;
+  ['mouseover', 'mouseenter', 'mousemove'].forEach((type) => {
+    node.dispatchEvent(new MouseEvent(type, { bubbles: type !== 'mouseenter', cancelable: true }));
+  });
+  try {
+    node.dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true, cancelable: true, pointerType: 'mouse', isPrimary: true,
+    }));
+  } catch (e) { /* 不支持 PointerEvent 就只发鼠标事件 */ }
+  try { node.focus?.({ preventScroll: true }); } catch (e) { /* 不可聚焦就跳过 */ }
+  node.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+  try { node.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true })); } catch (e) { /* 同上 */ }
+  node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+  node.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+  node.click();
+}
+
+function ghActivateCatalogItem(el, { reveal = true } = {}) {
   if (!el) return;
   const targets = [el];
   for (let node = el.parentElement; node && node !== document.body; node = node.parentElement) {
     const cls = String(node.className || '');
     if (node.tagName === 'LI' || /list_item/i.test(cls)) targets.push(node);
   }
-  const restore = ghRevealCatalogRoot();
+  // 点目录按钮本身不要展开面板：那会把「打开面板」这件正事搅乱
+  const restore = reveal ? ghRevealCatalogRoot() : null;
   try {
-    targets.forEach((node) => {
-      // 有些控件要先 hover / focus 才挂上处理器，按真实操作顺序补全事件
-      ['mouseover', 'mouseenter', 'mousemove'].forEach((type) => {
-        node.dispatchEvent(new MouseEvent(type, { bubbles: type !== 'mouseenter', cancelable: true }));
-      });
-      try {
-        node.dispatchEvent(new PointerEvent('pointerdown', {
-          bubbles: true, cancelable: true, pointerType: 'mouse', isPrimary: true,
-        }));
-      } catch (e) { /* 不支持 PointerEvent 就只发鼠标事件 */ }
-      try { node.focus?.({ preventScroll: true }); } catch (e) { /* 不可聚焦就跳过 */ }
-      node.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-      try { node.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true })); } catch (e) { /* 同上 */ }
-      node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-      node.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-      node.click();
-    });
+    targets.forEach(ghDispatchClick);
   } finally {
     restore?.();
   }
@@ -2525,11 +2531,48 @@ function ghChapterTitleText() {
   return (bar?.textContent || '').trim();
 }
 
+function ghCatalogRoot() {
+  return document.querySelector('.readerCatalog') || document.querySelector('[class*="catalog"]');
+}
+
 function ghCatalogRootSize() {
-  const root = document.querySelector('.readerCatalog') || document.querySelector('[class*="catalog"]');
+  const root = ghCatalogRoot();
   if (!root) return '(无面板)';
   const rect = root.getBoundingClientRect();
   return `${Math.round(rect.width)}x${Math.round(rect.height)}`;
+}
+
+function ghCatalogPanelOpen() {
+  const rect = ghCatalogRoot()?.getBoundingClientRect();
+  return !!rect && rect.width > 0 && rect.height > 0;
+}
+
+// 目录入口就在右侧竖排底栏的第一个按钮上：button.readerControls_item.catalog
+// （伪装态下底栏是 pointer-events:none，所以照样得走全套指针事件）
+function ghCatalogTrigger() {
+  return document.querySelector('.readerControls_item.catalog')
+    || Array.from(document.querySelectorAll('.readerControls_item'))
+      .find((el) => /catalog|目录/i.test(String(el.className || '')))
+    || null;
+}
+
+async function ghOpenCatalogPanel() {
+  if (ghCatalogPanelOpen()) return true;
+  const trigger = ghCatalogTrigger();
+  if (!trigger) return false;
+  ghActivateCatalogItem(trigger, { reveal: false });
+  for (let waited = 0; waited < 800; waited += 100) {
+    await ghSleep(100);
+    if (ghCatalogPanelOpen()) return true;
+  }
+  return false;
+}
+
+// 点完章节把面板收回去，别让原生目录留在伪装界面上
+function ghCloseCatalogPanel() {
+  if (!ghCatalogPanelOpen()) return;
+  const trigger = ghCatalogTrigger();
+  if (trigger) ghActivateCatalogItem(trigger, { reveal: false });
 }
 
 async function ghWaitChapterChange(before, timeout) {
@@ -2541,8 +2584,8 @@ async function ghWaitChapterChange(before, timeout) {
   return false;
 }
 
-// 跳章：点击处理器挂在外层行上，面板关着时整棵目录还是 0 尺寸，
-// 所以按「点章节名 → 按章节名重取节点 → 点最外层行」逐级重试，
+// 跳章：行是 0 尺寸时点不动，所以先点底栏的目录按钮把面板真正打开，
+// 再按「点章节名 → 按章节名重取节点 → 点最外层行」逐级重试，
 // 每次都用正文指纹确认是否真的换了章。返回 { ok, report } 便于把卡点告诉用户。
 async function ghJumpToCatalogEntry(node, label) {
   const report = [];
@@ -2556,16 +2599,27 @@ async function ghJumpToCatalogEntry(node, label) {
     return ok;
   };
 
-  if (await attempt(node, '点章节名')) return { ok: true, report };
+  const opened = await ghOpenCatalogPanel();
+  if (opened) {
+    const items = ghCollectCatalogItems();
+    // 面板一打开微信读书可能整块重渲染，侧栏缓存的节点会失效 → 优先用重新取到的节点
+    const fresh = items.find((el) => (el.textContent || '').trim() === label);
+    const anchor = fresh || node;
+    const row = anchor?.closest?.('.readerCatalog_list_item') || anchor?.closest?.('[class*="list_item"]');
+    const ok = (fresh && await attempt(fresh, '点章节名'))
+      || (node && node !== fresh && await attempt(node, '点侧栏节点'))
+      || (row && row !== fresh && await attempt(row, '点整行'));
+    ghCloseCatalogPanel();
+    if (ok) return { ok: true, report };
+    report.push(`面板${ghCatalogRootSize()}·${items.length}项`);
+    return { ok: false, report };
+  }
 
+  report.push('目录按钮没打开面板');
+  if (await attempt(node, '点章节名')) return { ok: true, report };
   const items = ghCollectCatalogItems();
   const fresh = items.find((el) => (el.textContent || '').trim() === label);
   if (fresh && fresh !== node && await attempt(fresh, '重取节点')) return { ok: true, report };
-
-  const anchor = fresh || node;
-  const row = anchor?.closest?.('.readerCatalog_list_item') || anchor?.closest?.('[class*="list_item"]');
-  if (row && await attempt(row, '点整行')) return { ok: true, report };
-
   report.push(`面板${ghCatalogRootSize()}·${items.length}项`);
   return { ok: false, report };
 }
@@ -3186,22 +3240,24 @@ function ghClickChapterNav(dir) {
     if (target && tryClick(target, 'bottom-first-last')) return true;
   }
 
-  // 目录兜底
-  const catalogTrigger = items.find((el) => /目录|catalog/i.test(
-    `${el.className} ${el.getAttribute('aria-label') || ''} ${el.getAttribute('title') || ''}`
-  ));
-  if (catalogTrigger) {
-    catalogTrigger.click();
-    setTimeout(() => {
-      const rows = Array.from(document.querySelectorAll(
-        '[class*="readerCatalog"] [class*="item"], [class*="catalog"] [class*="item"], [class*="Catalog"] li'
-      ));
-      if (!rows.length) return;
-      let idx = rows.findIndex((el) => /active|current|selected/i.test(String(el.className || '')));
-      if (idx < 0) idx = 0;
-      rows[idx + (forward ? 1 : -1)]?.click();
-    }, 500);
+  // 目录兜底：面板没开时行是 0 尺寸，先点底栏目录按钮把面板打开，点完再收回
+  if (ghCatalogTrigger()) {
     log('info', '翻章走目录兜底', { dir });
+    (async () => {
+      const opened = await ghOpenCatalogPanel();
+      if (opened) {
+        const list = ghCollectCatalogItems();
+        const idx = ghCatalogActiveIndex(list);
+        const next = idx >= 0 ? list[idx + (forward ? 1 : -1)] : null;
+        if (next) {
+          ghActivateCatalogItem(next);
+          await ghSleep(600);
+        }
+        ghCloseCatalogPanel();
+        if (next) return;
+      }
+      ghDispatchPageKey(dir); // 目录里定位不到当前章，退回按键翻页
+    })();
     return true;
   }
 
