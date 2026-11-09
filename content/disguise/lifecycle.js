@@ -85,8 +85,8 @@ function ghSetActive(on) {
         ghObserver = new MutationObserver(() => {
           // 正文被重建时观察目标会失效：先补挂，再去抖同步（顺序反了会漏一帧尺寸）
           if (WRE_STATE.disguise) ghEnsureLayoutObservers();
-          if (ghObserverTimer) clearTimeout(ghObserverTimer);
-          ghObserverTimer = setTimeout(() => {
+          if (ghObserverTimer) wreClearTimeout(ghObserverTimer);
+          ghObserverTimer = wreSetTimeout(() => {
             if (!WRE_STATE.disguise) return;
             ghSyncChrome();
             ghOnPagerScroll();
@@ -113,7 +113,6 @@ function ghSetActive(on) {
     // 关伪装时取消所有待执行的延迟任务：否则按 G 之后还会补一次 reflow / 屏占比，
     // 表现就是「已经退出了，页面又闪一下」。
     wreClearTimers();
-    ghModeReflowTrailing = null;
     document.documentElement.classList.remove('wre-gh-filebar-ok');
     ghFilebarFitKey = '';
     document.documentElement.classList.remove('wre-disguise');
@@ -124,10 +123,9 @@ function ghSetActive(on) {
     ghRestorePageIdentity();
     ghChromeSignature = '';
     ghLastSizeSig = '';
-    if (ghModeReflowTrailing) {
-      clearTimeout(ghModeReflowTrailing);
-      ghModeReflowTrailing = null;
-    }
+    // 定时器本体已由上面的 wreClearTimers() 取消，这里只重置标记，
+    // 否则下次切模式时 `!ghModeReflowTrailing` 恒为假、trailing 永远排不上。
+    ghModeReflowTrailing = null;
     if (!detectScrollMode()) scheduleWereadLayoutReflow('gh-disguise-off');
     if (ghObserver) {
       ghObserver.disconnect();

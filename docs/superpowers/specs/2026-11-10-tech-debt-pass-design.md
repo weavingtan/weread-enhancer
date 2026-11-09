@@ -136,3 +136,14 @@ function log(level, message, meta) {
   插件派发了几次 resize」，跨 reload 由 sessionStorage 承接。`>0` 才值得怀疑插件，`=0` 说明是
   微信读书自己刷的页面。
 - 配套：布局观察器加 160ms 去抖（见 §四.2），避免 canvas 重建时白派两次 resize。
+
+## 九、追加：代码审查整改（v0.43.1 / v0.44.1，原 spec 未覆盖）
+
+上一轮 code-review 提出的几项结构性问题没有对应 spec，属 review 驱动的整改，补记于此：
+
+- 伪装骨架层级收拢成 `--wre-z-*` 变量（原来 21474829xx 魔法数散在 8 个选择器里）；
+- `ghFilebarBottomPx` 的 `parseFloat || fallback` 改 `Number.isFinite`（Notion 合法地把栏高定为 0px）；
+- 延迟任务统一走 `wreSetTimeout` 登记、退出伪装 `wreClearTimers()` 清空；
+- 三处「定位节点 → 跳章 → 失败提示」统一成 `ghJumpChapter()`；
+- 章节查找器源列表按目录数组引用缓存；目录高亮让「当前章变了」绕过节流即时生效；
+- 书签检测对「目录项 <3 时的兜底分支」做了健壮化（见 bookmark spec）。

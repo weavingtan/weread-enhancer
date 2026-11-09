@@ -91,8 +91,15 @@ function ghChapterFileName(text) {
 function ghCatalogBookmarks(items) {
   return items.map((el) => {
     const row = el.closest?.('.readerCatalog_list_item') || el;
-    const rest = (row.textContent || '').replace((el.textContent || '').trim(), '');
-    return /书签/.test(rest);
+    // 主路径：el 是 _title_text 节点，行文本减掉标题就是 meta；
+    // 兜底路径：el 就是整行（目录项 <3 时 ghCollectCatalogItems 退回叶子节点），
+    // 没法做差集，只能找行内某个子节点文本恰好是「书签」。
+    if (el !== row) {
+      const rest = (row.textContent || '').replace((el.textContent || '').trim(), '');
+      return /书签/.test(rest);
+    }
+    return Array.from(row.querySelectorAll?.('*') || [])
+      .some((node) => (node.textContent || '').trim() === '书签');
   });
 }
 
