@@ -32,6 +32,8 @@ let lastPreviewLogAt = 0;
 let wreUnderlineReflowObserver = null;
 let wreUnderlineReflowTimer = null;
 let wreUnderlineReflowFired = false;
+// 上一次写进样式表的组合（比例|模式|基准宽），用于跳过「没变化还再写一遍」的兜底
+let wreAppliedSignature = '';
 
 // 自动阅读状态
 let autoReadTimer = null;
@@ -74,6 +76,13 @@ function triggerWereadLayoutReflow(reason) {
 // 插件改过正文宽度后，如果划线层先于/晚于这次重排渲染，就会出现「打开书籍划线错位、刷新才正常」。
 // 这里等划线层真正出现后再补一次重排，让官方按插件宽度重新计算划线坐标。
 function scheduleUnderlineLayerReflow(reason) {
+  // 屏占比 100% 时正文宽度与微信读书原生完全一致，划线坐标不需要重算；
+  // 这时候再补派 resize 只会让微信读书把整块正文重新渲染一遍
+  // —— 用户看到的就是「刷新页面后页面又刷新了一次」。
+  if (clampNumber(Number(WRE_STATE.screenRatio), 50, 100) >= 100) {
+    log('info', '屏占比 100%，跳过划线重排', { reason });
+    return;
+  }
   if (wreUnderlineReflowObserver) {
     wreUnderlineReflowObserver.disconnect();
     wreUnderlineReflowObserver = null;
@@ -98,8 +107,13 @@ function scheduleUnderlineLayerReflow(reason) {
       wreUnderlineReflowTimer = null;
     }
     scheduleWereadLayoutReflow(`${reason}:${tag}`);
-    // 官方划线层可能分多帧铺开，再补一次即可（原来还补到 2500ms，一天三次 resize 会连闪三下）
-    window.setTimeout(() => scheduleWereadLayoutReflow(`${reason}:${tag}-late1`), 700);
+    // 官方划线层可能分多帧铺开，再补一次；但划线层数量没变就说明没有新的一批铺开，
+    // 这时再派 resize 等于让微信读书白重排一次（用户看到的就是「又刷新了一次」）。
+    const underlineCount = document.querySelectorAll('.wr_underline_wrapper').length;
+    window.setTimeout(() => {
+      if (document.querySelectorAll('.wr_underline_wrapper').length === underlineCount) return;
+      scheduleWereadLayoutReflow(`${reason}:${tag}-late1`);
+    }, 700);
   };
 
   if (document.querySelector('.wr_underline_wrapper')) {
@@ -366,6 +380,7 @@ function updateStyleTag(ratio) {
   const scrollMode = detectScrollMode();
   const basePx = Number.isFinite(WRE_STATE.screenBasePx) && WRE_STATE.screenBasePx > 0 ? WRE_STATE.screenBasePx : null;
   const targetPx = (!scrollMode && basePx) ? Math.round((basePx * numericRatio) / 100) : null;
+  wreAppliedSignature = `${numericRatio}|${scrollMode ? 'scroll' : 'page'}|${basePx || 0}`;
 
   wreStyleTag.textContent = `
     ${buildRatioCSS(numericRatio)}
@@ -2202,8 +2217,10 @@ async function applySavedScreenRatioOnInit() {
       // 这里不再单独派发 resize —— 刷新时多次 resize 会让正文整块闪，像「又刷新了一次」。
       scheduleUnderlineLayerReflow('init-apply');
       log('info', '已在刷新后自动应用已保存的屏占比', applied);
-      // 兜底：稍后再应用一次，防止早期模式判定/渲染时机偏差（如 app_content 晚于正文出现）
+      // 兜底：模式/基准判定晚于正文时再补一次；组合没变就不重复写（重复写会再触发一遍样式重算）
       setTimeout(() => {
+        const signature = `${Number(WRE_STATE.screenRatio)}|${detectScrollMode() ? 'scroll' : 'page'}|${WRE_STATE.screenBasePx || 0}`;
+        if (signature === wreAppliedSignature) return;
         applyScreenRatio(WRE_STATE.screenRatio);
         log('info', '屏占比二次兜底应用', { ratio: WRE_STATE.screenRatio, scrollMode: detectScrollMode() });
       }, 800);
@@ -2216,15 +2233,30 @@ async function applySavedScreenRatioOnInit() {
   // 兜底：即使没判定「就绪」也强制应用一次（CSS 幂等；微信读书加载慢时也能补上）
   const applied = applyScreenRatio(ratio);
   scheduleUnderlineLayerReflow('init-apply-fallback');
-  setTimeout(() => {
-    applyScreenRatio(WRE_STATE.screenRatio);
-  }, 1200);
   log('warn', '刷新后未判定就绪，已兜底应用屏占比', { ratio, applied });
   return false;
 }
 
+// 5 秒内重复加载 = 页面真的被重新载入（而不是重排造成的视觉闪烁），
+// 排查「刷新后页面又刷新一次」时，这一行能直接区分两者。
+function wreTrackBoot() {
+  try {
+    const KEY = 'wre-boot-at';
+    const prev = Number(sessionStorage.getItem(KEY) || 0);
+    const now = Date.now();
+    sessionStorage.setItem(KEY, String(now));
+    if (prev && now - prev < 5000) {
+      log('warn', '检测到 5 秒内页面被重复加载', {
+        gapMs: now - prev,
+        navType: performance.getEntriesByType?.('navigation')?.[0]?.type || '(unknown)',
+      });
+    }
+  } catch (e) { /* 隐私模式下 sessionStorage 不可用就跳过 */ }
+}
+
 async function init() {
   const t0 = performance.now();
+  wreTrackBoot();
   await loadState();
   // 先把外观主题写到 <html>，并监听系统深浅色（选「跟随系统」时实时刷新）
   applyTheme();
