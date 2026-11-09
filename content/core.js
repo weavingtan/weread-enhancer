@@ -78,13 +78,35 @@ function scheduleWereadLayoutReflow(reason) {
   }, 0);
 }
 
+// 「页面被自己刷掉」这类问题只能靠计数对齐时间线：reload 紧跟在我们派发 resize 之后，
+// 才说明是我们的锅。计数要跨 reload 保留，所以落在 sessionStorage（隐私模式下不可用就返回 -1）。
+const WRE_REFLOW_COUNT_KEY = 'wre-reflow-count';
+
+function readReflowCount() {
+  try {
+    return Number(sessionStorage.getItem(WRE_REFLOW_COUNT_KEY) || 0);
+  } catch (e) {
+    return -1;
+  }
+}
+
+function bumpReflowCount() {
+  const next = readReflowCount() + 1;
+  try {
+    sessionStorage.setItem(WRE_REFLOW_COUNT_KEY, String(next));
+  } catch (e) {
+    return -1;
+  }
+  return next;
+}
+
 function triggerWereadLayoutReflow(reason) {
   try {
     void document.body?.offsetHeight;
     // 只派发 resize：orientationchange 会让微信读书当成「设备旋转」走一遍完整重排，
     // 视觉上就是页面内容整块闪一下（用户感知为「又刷新了一次」）。
     window.dispatchEvent(new Event('resize'));
-    log('info', '已触发页面重排', { reason });
+    log('info', '已触发页面重排', { reason, total: bumpReflowCount() });
   } catch (error) {
     log('warn', '触发页面重排失败', { reason, error: String(error) });
   }

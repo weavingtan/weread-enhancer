@@ -45,19 +45,47 @@ async function applySavedScreenRatioOnInit() {
   return false;
 }
 
-// 5 秒内重复加载 = 页面真的被重新载入（而不是重排造成的视觉闪烁），
-// 排查「刷新后页面又刷新一次」时，这一行能直接区分两者。
+// 重复加载探针：区分「真的整页重载」和「只是重排造成的视觉闪烁」。
+// 单次手刷（开发时按 Cmd+R）不该报警，所以不再对「5 秒内任意一次重载」都叫，
+// 而是看两件事：
+//   ① 15 秒内连续重载 ≥3 次 —— 这才是循环刷新；
+//   ② 间隔 <1.5 秒 —— 人手不可能这么快。
+// 同时带上「自上次重载以来我们派发了几次 resize」：>0 说明要怀疑插件，
+// =0 说明是微信读书自己刷的（这时插件是清白的，别去改代码猜）。
 function wreTrackBoot() {
   try {
-    const KEY = 'wre-boot-at';
-    const prev = Number(sessionStorage.getItem(KEY) || 0);
+    const BOOTS_KEY = 'wre-boot-log';
+    const REFLOW_SEEN_KEY = 'wre-prev-reflow';
     const now = Date.now();
-    sessionStorage.setItem(KEY, String(now));
-    if (prev && now - prev < 5000) {
-      log('warn', '检测到 5 秒内页面被重复加载', {
-        gapMs: now - prev,
-        navType: performance.getEntriesByType?.('navigation')?.[0]?.type || '(unknown)',
-      });
+
+    let history = [];
+    try {
+      const raw = JSON.parse(sessionStorage.getItem(BOOTS_KEY) || '[]');
+      if (Array.isArray(raw)) history = raw.filter((t) => Number.isFinite(t) && now - t < 60000);
+    } catch (e) {
+      history = [];
+    }
+    history.push(now);
+    sessionStorage.setItem(BOOTS_KEY, JSON.stringify(history.slice(-10)));
+
+    const navType = performance.getEntriesByType?.('navigation')?.[0]?.type || '(unknown)';
+    const reflows = readReflowCount();
+    const reflowsBefore = Number(sessionStorage.getItem(REFLOW_SEEN_KEY) || 0);
+    sessionStorage.setItem(REFLOW_SEEN_KEY, String(reflows));
+
+    const meta = {
+      count: history.filter((t) => now - t <= 15000).length,
+      gapMs: history.length >= 2 ? now - history[history.length - 2] : null,
+      navType,
+      reflowSincePrevBoot: reflows - reflowsBefore,
+    };
+
+    if (meta.count >= 3) {
+      log('warn', '15 秒内页面被重复加载', meta);
+    } else if (meta.gapMs !== null && meta.gapMs < 1500) {
+      log('warn', '页面在 1.5 秒内被再次加载', meta);
+    } else {
+      log('info', '启动探针', meta);
     }
   } catch (e) { /* 隐私模式下 sessionStorage 不可用就跳过 */ }
 }

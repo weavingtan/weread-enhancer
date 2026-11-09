@@ -346,7 +346,7 @@ let ghLayoutObserver = null;
 
 const ghLayoutTargets = new Set();
 
-let ghLayoutRaf = null;
+let ghLayoutSyncTimer = null;
 
 function ghObserveLayoutTarget(el) {
   if (!el || ghLayoutTargets.has(el)) return;
@@ -372,19 +372,22 @@ function ghEnsureLayoutObservers() {
   return ghLayoutTargets.size > 0;
 }
 
+// 160ms 去抖，而不是逐事件同步：微信读书重建 canvas 是「先移除、再插入」，
+// 逐帧同步会把模式签名算成 double → 单栏 → double，白派两次 resize（正文整块闪，
+// 严重时把阅读器搅进重渲染循环）。去抖后拿到的总是稳定下来的状态。
 function ghOnLayoutResize() {
-  if (ghLayoutRaf) return;
-  ghLayoutRaf = requestAnimationFrame(() => {
-    ghLayoutRaf = null;
+  if (ghLayoutSyncTimer) clearTimeout(ghLayoutSyncTimer);
+  ghLayoutSyncTimer = setTimeout(() => {
+    ghLayoutSyncTimer = null;
     if (!WRE_STATE.disguise) return;
     ghSyncChrome();
-  });
+  }, 160);
 }
 
 function ghStopLayoutObservers() {
-  if (ghLayoutRaf) {
-    cancelAnimationFrame(ghLayoutRaf);
-    ghLayoutRaf = null;
+  if (ghLayoutSyncTimer) {
+    clearTimeout(ghLayoutSyncTimer);
+    ghLayoutSyncTimer = null;
   }
   if (!ghLayoutObserver) return;
   ghLayoutObserver.disconnect();
