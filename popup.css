@@ -1,0 +1,221 @@
+/* GitHub Reader · 工具栏弹窗（插件设置唯一入口） */
+
+:root {
+  --wre-bg: #ffffff;
+  --wre-border: #e5e7eb;
+  --wre-text: #1f2329;
+  --wre-text-soft: #6b7280;
+  --wre-accent: #1f883d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+}
+
+body {
+  width: 340px;
+  padding: 14px 14px 16px;
+  background: var(--wre-bg);
+  color: var(--wre-text);
+  font: 13px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wre-pop-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wre-pop-logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  flex: 0 0 36px;
+}
+
+.wre-pop-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.wre-pop-ver {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--wre-text-soft);
+}
+
+.wre-pop-tip {
+  margin: 6px 0 12px;
+  font-size: 11.5px;
+  color: var(--wre-text-soft);
+}
+
+.wre-pop-card {
+  padding: 6px 12px;
+  margin-bottom: 10px;
+  border: 1px solid var(--wre-border);
+  border-radius: 10px;
+}
+
+.wre-pop-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.wre-pop-label {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.wre-pop-hint {
+  margin: 2px 0 6px;
+  font-size: 11px;
+  color: var(--wre-text-soft);
+  line-height: 1.5;
+}
+
+.wre-pop-hint kbd {
+  padding: 0 4px;
+  font-family: inherit;
+  border: 1px solid var(--wre-border);
+  border-radius: 4px;
+}
+
+/* 开关 */
+.wre-pop-switch {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 11px;
+  background: #d0d7de;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  flex-shrink: 0;
+}
+
+.wre-pop-switch i {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(31, 35, 40, 0.25);
+  transition: transform 0.15s;
+}
+
+.wre-pop-switch.wre-on {
+  background: var(--wre-accent);
+}
+
+.wre-pop-switch.wre-on i {
+  transform: translateX(16px);
+}
+
+/* 滑块 */
+.wre-pop-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.wre-pop-range input[type="range"] {
+  width: 150px;
+  accent-color: var(--wre-accent);
+}
+
+.wre-pop-value {
+  min-width: 38px;
+  font-size: 12px;
+  color: var(--wre-text-soft);
+  text-align: right;
+}
+
+/* 分段按钮 */
+.wre-pop-seg {
+  display: flex;
+  gap: 4px;
+}
+
+.wre-pop-seg button {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--wre-text);
+  background: #f6f8fa;
+  border: 1px solid var(--wre-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.wre-pop-seg button.wre-active {
+  color: #ffffff;
+  background: var(--wre-accent);
+  border-color: var(--wre-accent);
+}
+
+/* 正文主题 */
+.wre-pop-bg {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wre-pop-arrow {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--wre-text);
+  background: #f6f8fa;
+  border: 1px solid var(--wre-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.wre-pop-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--wre-border);
+  border-radius: 4px;
+}
+
+.wre-pop-bg-name {
+  min-width: 72px;
+  font-size: 12px;
+  color: var(--wre-text-soft);
+  text-align: center;
+}
+
+/* 恢复默认 */
+.wre-pop-reset {
+  width: 100%;
+  padding: 8px;
+  font-size: 13px;
+  color: var(--wre-text);
+  background: #f6f8fa;
+  border: 1px solid var(--wre-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.wre-pop-reset:hover {
+  background: #eaeef2;
+}

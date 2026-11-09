@@ -1,0 +1,71 @@
+# 运行产物
+weread-debug-*.json
+日志/
+__debug_*
+.dbg/
+
+# 构建产物
+*.zip
+debug.log
+
+# 自动抓图工具：Playwright 独立浏览器用户目录（含登录态与隐私，绝不可入库）
+.autoshot/
+
+# 自动抓取的原始截图（本机生成、含真实书页内容，不入库；promo.py 产出的展示图才入库）
+screenshots/auto/
+
+# 私钥与扩展打包产物（.pem 绝不可入库）
+*.pem
+*.crx
+release/weread-enhancer-v*/
+
+# 商店发版素材（二进制图片，勿入库）
+release/360上传包/
+release/360-扩展目录/
+
+# 各渠道「按帖子分好」的发帖文件夹（由母版图复制生成、可随时重建，不入库）
+marketing/**/帖子/
+
+# 软著登记时填写的个人信息（含身份证号等，绝不可入库）
+marketing/软著申请/form_data.json
+marketing/软著申请/申请信息清单.md
+
+# 软著生成产物（PDF/HTML，由 gen_materials.py 随时重建，不入库）
+marketing/软著申请/输出/
+
+# 抓图/发帖临时文件
+tools/_zhihu_tmp.py
+
+# Trae 本地配置（规则/技能副本由「AI协作规划库」母本同步生成，不入库）
+.trae/
+.pai/
+
+# 个人文件（不入库）
+备忘录.md
+inbox/
+
+# 微信开发者工具的本机私有配置（本地编辑器设置，不入库）
+mobile/project.private.config.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+attachments/
+# 网站内容图片需入库：覆盖上面的 attachments/ 通用忽略规则
+!web/content/attachments/
+!web/content/attachments/**
+
+# 网站：构建产物与 Obsidian 本地配置不入库
+web/dist/
+web/content/.obsidian/
+web/content/.trash/
+
+# Vercel 本地项目关联（含 projectId，属本机配置）
+.vercel/
+web/.vercel/
+
+# 系统
+.DS_Store
+Thumbs.db

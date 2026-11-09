@@ -1,0 +1,1296 @@
+/* 全局设计 Token（唯一来源）：各模块只引用 var(--wre-*)，不在此重复定义 */
+:root {
+  --wre-primary: #07c160;      /* 品牌主色 */
+  --wre-primary-soft: #e8f5e9; /* 品牌主色的浅色底（选中态 / 高亮） */
+  --wre-bg: #ffffff;
+  --wre-border: #e0e0e0;
+  --wre-text: #333333;
+  --wre-text-hover: #000000;
+  --wre-hover-bg: #f5f5f5;
+  --wre-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  --wre-icon-bg: #ffffff;
+  --wre-border-radius: 8px;
+  --wre-z-index: 999999;
+}
+
+/* 外观主题档（B 档）：深色只覆盖与浅色不同的值，其余沿用上方默认。
+   data-wre-theme 由 content.js 挂在 <html> 上；「跟随系统」时自动解析为 light / dark。 */
+:root[data-wre-theme="dark"] {
+  --wre-primary: #07c160;
+  --wre-primary-soft: #1e3a29;
+  --wre-bg: #26272b;
+  --wre-border: #3c3d42;
+  --wre-text: #e6e6e8;
+  --wre-text-hover: #ffffff;
+  --wre-hover-bg: #33343a;
+  --wre-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  --wre-icon-bg: #26272b;
+}
+
+/* 深色下仅让插件自身界面的原生控件跟随深色，避免影响官方页面 */
+:root[data-wre-theme="dark"] #we-read-enhancer-root {
+  color-scheme: dark;
+}
+
+/* 根容器，隔离样式防干扰 */
+#we-read-enhancer-root {
+  position: fixed;
+  left: 20px;
+  top: 40px;
+  z-index: var(--wre-z-index);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  user-select: none;
+}
+
+/* 浮动按钮（品牌 Logo：蓝底白 W，与 assets/logo.svg 一致） */
+.wre-fab {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: var(--wre-shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.wre-fab-logo {
+  width: 44px;
+  height: 44px;
+  display: block;
+  pointer-events: none;
+  border-radius: 50%;
+}
+
+.wre-fab:hover {
+  transform: scale(1.05);
+}
+
+/* 空闲收起：不打扰阅读，但保留半透明轮廓，鼠标靠近左上角感应区即恢复 */
+#we-read-enhancer-root.wre-fab-resting .wre-fab {
+  opacity: 0.18;
+  transform: scale(0.92);
+}
+#we-read-enhancer-root.wre-fab-resting:hover .wre-fab {
+  opacity: 1;
+  transform: scale(1.05);
+}
+
+/* 沉浸模式：悬浮球完全隐藏，鼠标移到左上角原位置（或悬停原区域）即唤出 */
+#we-read-enhancer-root.wre-immersive-fab .wre-fab {
+  opacity: 0;
+  transform: scale(0.5);
+}
+#we-read-enhancer-root.wre-immersive-fab:hover .wre-fab {
+  opacity: 1;
+  transform: scale(1.05);
+}
+
+/* 主面板下拉菜单 */
+.wre-panel-container {
+  position: absolute;
+  top: 52px; /* Icon height + margin */
+  left: 0;
+  width: 180px;
+  background: var(--wre-bg);
+  border: 1px solid var(--wre-border);
+  border-radius: var(--wre-border-radius);
+  box-shadow: var(--wre-shadow);
+  display: none;
+  flex-direction: column;
+  padding: 8px 0;
+}
+
+.wre-panel-container.wre-visible {
+  display: flex;
+}
+
+/* 菜单项 */
+.wre-menu-item {
+  padding: 10px 16px;
+  font-size: 14px;
+  color: var(--wre-text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: background 0.1s;
+}
+
+.wre-menu-item:hover {
+  background: var(--wre-hover-bg);
+  color: var(--wre-text-hover);
+}
+
+/* 菜单分组标题 */
+.wre-menu-group {
+  padding: 4px 16px 4px;
+  font-size: 12px;
+  color: #999;
+  border-top: 1px solid var(--wre-border);
+  margin-top: 6px;
+  padding-top: 10px;
+}
+.wre-menu-group:first-child {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 4px;
+}
+
+/* 图标宽幅一致占位 */
+.wre-menu-icon {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 14px;
+}
+
+/* ========== 弹窗样式 ========== */
+.wre-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: calc(var(--wre-z-index) + 1);
+}
+
+.wre-modal-overlay.wre-visible {
+  display: flex;
+}
+
+.wre-modal {
+  background: var(--wre-bg);
+  border-radius: 12px;
+  box-shadow: var(--wre-shadow);
+  width: 360px;
+  max-width: 90vw;
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.wre-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--wre-border);
+}
+
+.wre-modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--wre-text);
+}
+
+.wre-modal-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--wre-text);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.wre-modal-close:hover {
+  background: var(--wre-hover-bg);
+}
+
+.wre-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+}
+
+/* ========== 设置项样式 ========== */
+.wre-setting-item {
+  margin-bottom: 20px;
+}
+
+.wre-setting-item:last-child {
+  margin-bottom: 0;
+}
+
+.wre-setting-label {
+  display: block;
+  font-size: 14px;
+  color: var(--wre-text);
+  margin-bottom: 12px;
+  font-weight: 500;
+}
+
+.wre-setting-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ========== 滑块样式 ========== */
+.wre-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--wre-border);
+  outline: none;
+  cursor: pointer;
+}
+
+.wre-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--wre-primary);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(7, 193, 96, 0.4);
+  transition: transform 0.15s ease;
+}
+
+.wre-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+}
+
+.wre-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--wre-primary);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 6px rgba(7, 193, 96, 0.4);
+}
+
+.wre-slider-value {
+  min-width: 50px;
+  text-align: right;
+  font-size: 14px;
+  color: var(--wre-text);
+  font-weight: 500;
+}
+
+/* 正文主题色块（设置面板主题行） */
+.wre-bg-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid var(--wre-border);
+  flex: 0 0 auto;
+}
+
+.wre-setting-tip {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #888;
+  line-height: 1.5;
+}
+
+.wre-btn {
+  border: 1px solid var(--wre-border);
+  background: var(--wre-bg);
+  color: var(--wre-text);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.wre-btn:hover {
+  background: var(--wre-hover-bg);
+}
+
+.wre-btn-small {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+
+.wre-btn-danger {
+  color: #c0392b;
+}
+
+/* 沉浸模式开关的激活态 */
+.wre-btn.wre-immersive-active {
+  background: var(--wre-primary);
+  border-color: var(--wre-primary);
+  color: #fff;
+}
+
+.wre-quick-actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 外观主题档（B 档）：三档分段按钮，选中态用品牌绿高亮 */
+.wre-theme-toggle {
+  display: flex;
+  gap: 8px;
+}
+
+.wre-theme-btn.wre-theme-active {
+  border-color: var(--wre-primary);
+  background: var(--wre-primary-soft);
+  color: var(--wre-primary);
+  font-weight: 600;
+}
+
+/* ========== 顶部工具栏浮动悬停 ========== */
+body.wre-toolbar-floating .readerTopBar,
+body.wre-toolbar-floating [class*="readerTopBar"] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.3s ease !important;
+}
+
+body.wre-toolbar-floating.wre-show-topbar .readerTopBar,
+body.wre-toolbar-floating.wre-show-topbar [class*="readerTopBar"] {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+body.wre-toolbar-floating .readerControls,
+body.wre-toolbar-floating [class*="readerControls"] {
+  left: auto !important;
+  right: 20px !important;
+  margin-left: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.3s ease !important;
+}
+
+body.wre-toolbar-floating.wre-show-controls .readerControls,
+body.wre-toolbar-floating.wre-show-controls [class*="readerControls"] {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+/* ========== 自动阅读样式 ========== */
+.wre-autoread-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.wre-autoread-btn {
+  flex: 1;
+  min-width: 160px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+  border: 2px solid var(--wre-border);
+  border-radius: 8px;
+  background: var(--wre-bg);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.wre-autoread-btn:hover {
+  border-color: var(--wre-primary);
+}
+
+.wre-autoread-btn.wre-autoread-active {
+  border-color: var(--wre-primary);
+  background: var(--wre-primary-soft);
+  color: var(--wre-primary);
+}
+
+.wre-direction-toggle {
+  display: flex;
+  gap: 4px;
+}
+
+.wre-dir-btn {
+  padding: 8px 12px;
+  font-size: 13px;
+  border: 2px solid var(--wre-border);
+  border-radius: 8px;
+  background: var(--wre-bg);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.wre-dir-btn:hover {
+  border-color: var(--wre-primary);
+}
+
+.wre-dir-btn.wre-dir-active {
+  border-color: var(--wre-primary);
+  background: var(--wre-primary-soft);
+}
+
+/* ========== 快捷键帮助面板 ========== */
+.wre-shortcuts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.wre-shortcuts-table th,
+.wre-shortcuts-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--wre-border);
+}
+
+.wre-shortcuts-table th {
+  font-weight: 600;
+  color: #888;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.wre-shortcuts-table td:first-child {
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  font-weight: 600;
+  color: var(--wre-text);
+  white-space: nowrap;
+  width: 80px;
+}
+
+.wre-shortcuts-table td:nth-child(2) {
+  color: var(--wre-text);
+}
+
+.wre-shortcuts-table td:nth-child(3) {
+  color: #888;
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* 分组标题行（插件快捷键 / 微信读书原生） */
+.wre-shortcuts-table tr.wre-shortcuts-group > td {
+  padding: 6px 12px;
+  width: auto;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #888;
+  background: var(--wre-hover-bg);
+  text-align: left;
+  white-space: normal;
+}
+
+.wre-shortcuts-table .wre-shortcut-key {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--wre-hover-bg);
+  border: 1px solid var(--wre-border);
+  border-radius: 4px;
+  font-size: 12px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.wre-shortcuts-table .wre-shortcut-sep {
+  margin: 0 2px;
+  color: #999;
+}
+
+.wre-shortcuts-footer {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--wre-border);
+  font-size: 12px;
+  color: #888;
+  text-align: center;
+}
+
+/* ========== 滚动模式：自绘悬浮滚动条（隐藏原生，默认隐藏，鼠标靠右淡入） ========== */
+/* 彻底隐藏原生视口滚动条 */
+html.wre-scrollmode::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+/* 自绘悬浮滚动条容器：不占布局、默认隐藏 */
+#wre-custom-scrollbar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 12px;
+  height: 100vh;
+  z-index: 999998;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  display: none;
+}
+html.wre-scrollmode.wre-show-scrollbar #wre-custom-scrollbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+#wre-custom-scrollbar-thumb {
+  position: absolute;
+  right: 2px;
+  width: 8px;
+  border-radius: 4px;
+  background: rgba(127, 127, 127, 0.55);
+  transition: background 0.2s ease;
+}
+#wre-custom-scrollbar-thumb:hover {
+  background: rgba(127, 127, 127, 0.85);
+  width: 10px;
+  right: 1px;
+}
+
+/* ========== GitHub 伪装层（v0.36） ==========
+ * 只隐藏/覆盖微信读书原生栏位，不改正文布局：滚动与翻章行为完全保持原生。
+ */
+
+:root {
+  --wre-gh-topbar-h: 48px;
+  --wre-gh-repobar-h: 44px;
+  --wre-gh-card-bg: #ffffff;
+  --wre-gh-page-bg: #f6f8fa;
+  --wre-gh-panel-bg: #ffffff;
+  --wre-gh-hover-bg: #eaeef2;
+  --wre-gh-border: #d0d7de;
+  --wre-gh-border-soft: #d8dee4;
+  --wre-gh-fg: #1f2328;
+  --wre-gh-fg-muted: #59636e;
+  --wre-gh-accent: #0969da;
+}
+
+html.wre-gh-dark {
+  --wre-gh-page-bg: #010409;
+  --wre-gh-panel-bg: #161b22;
+  --wre-gh-hover-bg: #21262d;
+  --wre-gh-border: #30363d;
+  --wre-gh-border-soft: #21262d;
+  --wre-gh-fg: #e6edf3;
+  --wre-gh-fg-muted: #8b949e;
+  --wre-gh-accent: #2f81f7;
+}
+
+/* 原生栏位：变透明而不是移除（保持原有空间与交互，正文布局零位移） */
+html.wre-disguise .readerTopBar,
+html.wre-disguise [class*="readerTopBar"] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+html.wre-disguise .readerControls,
+html.wre-disguise [class*="readerControls"] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+html.wre-disguise .readerFooter,
+html.wre-disguise [class*="readerFooter"],
+html.wre-disguise [class*="readerBottom"] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+html.wre-disguise .renderTargetPageInfo_header {
+  display: none !important;
+}
+/* 悬浮球在伪装态完全隐藏（可疑） */
+html.wre-disguise #we-read-enhancer-root .wre-fab {
+  display: none !important;
+}
+html.wre-disguise body {
+  background: var(--wre-gh-page-bg) !important;
+}
+
+/* 正文文件卡片：只加外框与配色，不改宽度。
+ * padding 只给滚动模式——翻页模式（含单栏翻页）正文是定高页面，加内边距会把文字挤出页。 */
+html.wre-disguise:not(.wre-double-column) .readerChapterContent {
+  background: var(--wre-gh-card-bg) !important;
+  border: 1px solid var(--wre-gh-border) !important;
+  border-radius: 6px !important;
+  box-shadow: 0 1px 0 rgba(31, 35, 40, 0.04);
+  box-sizing: border-box;
+}
+html.wre-disguise.wre-gh-scroll .readerChapterContent {
+  padding: 24px 32px !important;
+}
+html.wre-disguise:not(.wre-double-column) .readerChapterContent * {
+  border-color: var(--wre-gh-border-soft) !important;
+}
+
+/* 伪装态正文固定 GitHub 配色：统一深灰/浅灰字色，暖色主题只在退出伪装时自己看。
+ * 微信读书的内联 color 不带 !important，这里的规则可以盖住。 */
+html.wre-disguise .readerChapterContent,
+html.wre-disguise .readerChapterContent * {
+  color: var(--wre-gh-fg) !important;
+  -webkit-text-fill-color: var(--wre-gh-fg) !important;
+}
+html.wre-disguise .readerChapterContent {
+  background-color: var(--wre-gh-card-bg) !important;
+}
+html.wre-disguise:not(.wre-double-column) .readerChapterContent a {
+  color: var(--wre-gh-accent) !important;
+  -webkit-text-fill-color: var(--wre-gh-accent) !important;
+}
+
+/* 滚动模式行距/字号靠拢网页正文（翻页模式改字号会打乱既有分页，不能碰） */
+html.wre-disguise.wre-gh-scroll .readerChapterContent {
+  font-size: 16px !important;
+  line-height: 1.75 !important;
+}
+
+/* 双栏模式：只给容器加外框（Canvas 尺寸不受影响） */
+html.wre-disguise.wre-double-column .wr_horizontalReader_app_content {
+  background: var(--wre-gh-card-bg) !important;
+  border: 1px solid var(--wre-gh-border) !important;
+  border-radius: 6px !important;
+}
+
+/* ---- 骨架：常驻 DOM，仅伪装态显示 ---- */
+
+#wre-gh-shell {
+  display: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+html.wre-disguise #wre-gh-shell {
+  display: block;
+}
+#wre-gh-shell,
+#wre-gh-shell * {
+  box-sizing: border-box;
+}
+.wre-gh-ico {
+  display: inline-block;
+  vertical-align: text-bottom;
+  flex-shrink: 0;
+}
+
+/* 顶栏 */
+.wre-gh-topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--wre-gh-topbar-h);
+  background: #24292f;
+  z-index: 2147483000;
+  user-select: none;
+}
+.wre-gh-topbar-inner {
+  max-width: 1280px;
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.wre-gh-topbar-sep {
+  width: 1px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.25);
+}
+.wre-gh-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 240px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #57606a;
+  border-radius: 6px;
+  color: #8c959f;
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.04);
+}
+.wre-gh-search kbd {
+  margin-left: auto;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  border: 1px solid #57606a;
+  border-radius: 4px;
+  color: #8c959f;
+}
+.wre-gh-topnav {
+  display: flex;
+  gap: 16px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+}
+.wre-gh-topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: #ffffff;
+}
+.wre-gh-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  background:
+    radial-gradient(circle at 30% 30%, #f6d365 0 28%, transparent 28%),
+    radial-gradient(circle at 68% 34%, #333 0 18%, transparent 18%),
+    linear-gradient(160deg, #84fab0 0%, #3b82f6 90%);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+.wre-gh-avatar:hover {
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline-offset: 1px;
+}
+
+/* 仓库条：面包屑 + 页签 */
+.wre-gh-repobar {
+  position: fixed;
+  top: var(--wre-gh-topbar-h);
+  left: 0;
+  right: 0;
+  height: var(--wre-gh-repobar-h);
+  background: var(--wre-gh-page-bg);
+  border-bottom: 1px solid var(--wre-gh-border);
+  z-index: 2147482999;
+  user-select: none;
+}
+.wre-gh-repobar-inner {
+  max-width: 1280px;
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.wre-gh-crumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--wre-gh-fg-muted);
+  font-size: 15px;
+  white-space: nowrap;
+}
+.wre-gh-crumb-owner,
+.wre-gh-crumb-repo {
+  color: var(--wre-gh-accent);
+  font-weight: 600;
+}
+.wre-gh-badge {
+  padding: 1px 8px;
+  margin-left: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--wre-gh-fg-muted);
+  border: 1px solid var(--wre-gh-border);
+  border-radius: 20px;
+}
+.wre-gh-tabs {
+  display: flex;
+  gap: 4px;
+  height: 100%;
+  align-items: stretch;
+}
+.wre-gh-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  font-size: 14px;
+  color: var(--wre-gh-fg);
+  white-space: nowrap;
+}
+.wre-gh-tab-active {
+  font-weight: 600;
+  position: relative;
+}
+.wre-gh-tab-active::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -1px;
+  height: 2px;
+  background: #fd8c73;
+  border-radius: 2px;
+}
+.wre-gh-file-chip {
+  margin-left: auto;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--wre-gh-fg-muted);
+  border: 1px solid var(--wre-gh-border);
+  border-radius: 6px;
+  background: var(--wre-gh-panel-bg);
+}
+
+/* 伪分页条 */
+.wre-gh-pager {
+  display: none;
+  position: fixed;
+  right: 32px;
+  bottom: 24px;
+  z-index: 2147482997;
+  gap: 8px;
+  user-select: none;
+}
+html.wre-disguise.wre-double-column .wre-gh-pager,
+html.wre-disguise .wre-gh-pager.wre-pager-visible {
+  display: flex;
+}
+.wre-gh-pager-btn {
+  padding: 5px 14px;
+  font-size: 13px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", sans-serif;
+  color: var(--wre-gh-accent);
+  background: var(--wre-gh-page-bg);
+  border: 1px solid var(--wre-gh-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.wre-gh-pager-btn:hover {
+  background: var(--wre-gh-hover-bg);
+}
+
+/* Toast */
+#wre-gh-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 72px;
+  transform: translateX(-50%) translateY(8px);
+  max-width: 60vw;
+  padding: 10px 20px;
+  background: #24292f;
+  color: #ffffff;
+  font-size: 14px;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(31, 35, 40, 0.2);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  z-index: 2147483003;
+}
+#wre-gh-toast.wre-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ========== 左侧伪文件树 ==========
+ * 滚动模式：收窄 .app_content + 居中，把左边距让给文件树（不走屏占比，避免和用户设置打架）。
+ * 翻页模式：正文宽度/边距一律不动（翻页正文是定高页面，改宽度会挤出页），
+ *          单栏翻页留白通常不足，侧栏保持隐藏；双栏由 JS 量留白后加 .wre-gh-sidebar-ok 显示。
+ */
+
+:root {
+  --wre-gh-sidebar-w: 248px;
+  --wre-gh-sidebar-gap: 32px;
+}
+
+html.wre-disguise.wre-gh-scroll .app_content {
+  width: calc(100% - (var(--wre-gh-sidebar-w) + var(--wre-gh-sidebar-gap)) * 2) !important;
+  max-width: calc(100% - (var(--wre-gh-sidebar-w) + var(--wre-gh-sidebar-gap)) * 2) !important;
+  margin-left: calc(var(--wre-gh-sidebar-w) + var(--wre-gh-sidebar-gap)) !important;
+  margin-right: calc(var(--wre-gh-sidebar-w) + var(--wre-gh-sidebar-gap)) !important;
+}
+
+/* 侧栏是否显示统一由 content.js 量完留白后加 .wre-gh-sidebar-ok 决定：
+ * 滚动模式靠收窄正文腾出 280px，翻页模式只能吃页边留白，留白不足就不显示。 */
+html.wre-disguise.wre-gh-sidebar-ok .wre-gh-sidebar {
+  display: block;
+}
+
+.wre-gh-sidebar {
+  display: none;
+  position: fixed;
+  top: calc(var(--wre-gh-topbar-h) + var(--wre-gh-repobar-h));
+  left: 0;
+  bottom: 0;
+  width: var(--wre-gh-sidebar-w);
+  padding: 16px 12px;
+  background: var(--wre-gh-page-bg);
+  border-right: 1px solid var(--wre-gh-border);
+  overflow-y: auto;
+  z-index: 2147482998;
+  user-select: none;
+}
+
+.wre-gh-side-repo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 12px;
+}
+
+.wre-gh-side-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  background: linear-gradient(160deg, #3b82f6 0%, #84fab0 100%);
+}
+
+.wre-gh-side-repo-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+  min-width: 0;
+}
+
+.wre-gh-side-repo-text b {
+  font-size: 14px;
+  color: var(--wre-gh-accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wre-gh-side-repo-text i {
+  font-style: normal;
+  font-size: 12px;
+  color: var(--wre-gh-fg-muted);
+}
+
+.wre-gh-side-branch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: var(--wre-gh-fg);
+  background: var(--wre-gh-panel-bg);
+  border: 1px solid var(--wre-gh-border);
+  border-radius: 6px;
+}
+
+.wre-gh-side-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--wre-gh-fg-muted);
+  background: var(--wre-gh-panel-bg);
+  border: 1px solid var(--wre-gh-border);
+  border-radius: 6px;
+}
+
+.wre-gh-side-search kbd {
+  margin-left: auto;
+  padding: 0 5px;
+  font-size: 11px;
+  color: var(--wre-gh-fg-muted);
+  border: 1px solid var(--wre-gh-border);
+  border-radius: 4px;
+}
+
+.wre-gh-tree-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  font-size: 14px;
+  color: var(--wre-gh-fg);
+  border-radius: 6px;
+  cursor: default;
+}
+
+.wre-gh-tree-item:hover {
+  background: var(--wre-gh-hover-bg);
+}
+
+.wre-gh-tree-active {
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--wre-gh-accent);
+}
+
+/* ========== 设置入口统一到弹窗（v0.37.0） ==========
+ * 阅读页不再显示悬浮球 / 设置面板 / 快捷键弹窗，全部设置走插件弹窗。
+ */
+#we-read-enhancer-root {
+  display: none !important;
+}
+
+/* 窄屏自适应：侧栏与留白缩小，避免正文被压得太窄 */
+@media (max-width: 1400px) {
+  :root {
+    --wre-gh-sidebar-w: 208px;
+    --wre-gh-sidebar-gap: 24px;
+  }
+}
+
+/* 双栏模式：正文宽度不动，只在左侧留白里放侧栏（宽度按留白自动计算） */
+html.wre-disguise.wre-double-column.wre-gh-sidebar-ok .wre-gh-sidebar {
+  display: block;
+}
+
+html.wre-disguise.wre-double-column .wre-gh-sidebar {
+  width: var(--wre-gh-sidebar-visual-w, var(--wre-gh-sidebar-w));
+  border-right: 1px solid var(--wre-gh-border);
+  background: var(--wre-gh-page-bg);
+}
+
+html.wre-disguise.wre-double-column .wre-gh-side-repo,
+html.wre-disguise.wre-double-column .wre-gh-side-branch,
+html.wre-disguise.wre-double-column .wre-gh-side-search,
+html.wre-disguise.wre-double-column .wre-gh-tree-item {
+  background: var(--wre-gh-panel-bg);
+}
+
+html.wre-disguise.wre-double-column .wre-gh-tree-item {
+  background: transparent;
+}
+
+/* 双栏侧栏宽度按书页留白自适应，可能比 248px 窄很多：收紧内边距 + 截断长文件名，
+ * 保证 120px 宽时也不挤爆、不换行。 */
+html.wre-disguise.wre-double-column .wre-gh-sidebar {
+  padding: 12px 8px;
+  overflow-x: hidden;
+}
+html.wre-disguise.wre-double-column .wre-gh-side-repo {
+  padding: 0 4px 10px;
+}
+html.wre-disguise.wre-double-column .wre-gh-tree-item,
+html.wre-disguise.wre-double-column .wre-gh-side-branch,
+html.wre-disguise.wre-double-column .wre-gh-side-search {
+  padding-left: 6px;
+  padding-right: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+html.wre-disguise.wre-double-column .wre-gh-tree-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+html.wre-disguise.wre-double-column .wre-gh-side-search kbd {
+  display: none;
+}
+
+/* ========== 皮肤二：Notion 团队文档页（v0.38.0） ==========
+ * 白底、顶部面包屑、左侧页面树，语境是「在看公司文档」。
+ * 只换外壳与配色，正文布局与滚动/翻页行为完全复用 GitHub 皮肤。 */
+
+html[data-wre-skin="notion"] {
+  --wre-gh-topbar-h: 44px;
+  --wre-gh-repobar-h: 0px;
+  --wre-gh-card-bg: #ffffff;
+  --wre-gh-page-bg: #ffffff;
+  --wre-gh-panel-bg: #f7f7f5;
+  --wre-gh-hover-bg: #f1f1ef;
+  --wre-gh-border: #e9e9e7;
+  --wre-gh-border-soft: #efefed;
+  --wre-gh-fg: #37352f;
+  --wre-gh-fg-muted: #9b9a97;
+  --wre-gh-accent: #2383e2;
+}
+
+html[data-wre-skin="notion"].wre-gh-dark {
+  --wre-gh-card-bg: #191919;
+  --wre-gh-page-bg: #191919;
+  --wre-gh-panel-bg: #202020;
+  --wre-gh-hover-bg: #2c2c2c;
+  --wre-gh-border: #2f2f2f;
+  --wre-gh-border-soft: #2a2a2a;
+  --wre-gh-fg: #d4d4d4;
+  --wre-gh-fg-muted: #9b9b9b;
+  --wre-gh-accent: #529cca;
+}
+
+/* 顶栏：白底 + 下边框 + 面包屑 */
+.wre-nb-topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--wre-gh-topbar-h);
+  background: var(--wre-gh-page-bg);
+  border-bottom: 1px solid var(--wre-gh-border);
+  z-index: 2147483000;
+  user-select: none;
+}
+.wre-nb-topbar-inner {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", "PingFang SC", sans-serif;
+}
+.wre-nb-logo,
+.wre-nb-ws-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+  background: #1f2328;
+}
+.wre-nb-ws-avatar {
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
+}
+.wre-nb-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--wre-gh-fg-muted);
+}
+.wre-nb-crumb {
+  color: var(--wre-gh-fg);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wre-nb-crumb-muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wre-nb-slash {
+  color: var(--wre-gh-fg-muted);
+  opacity: 0.6;
+}
+.wre-nb-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--wre-gh-fg-muted);
+}
+.wre-nb-share {
+  padding: 3px 10px;
+  border-radius: 5px;
+  background: var(--wre-gh-hover-bg);
+  color: var(--wre-gh-fg);
+}
+.wre-nb-dots {
+  letter-spacing: 1px;
+}
+html[data-wre-skin="notion"] .wre-gh-avatar {
+  border-radius: 50%;
+}
+
+/* 侧栏：页面树（缩进 + 文档小方块），不是代码文件树 */
+.wre-nb-side {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", "PingFang SC", sans-serif;
+}
+.wre-nb-workspace {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 12px;
+  font-size: 13px;
+  color: var(--wre-gh-fg);
+  overflow: hidden;
+}
+.wre-nb-workspace b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wre-nb-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--wre-gh-fg-muted);
+  border-radius: 5px;
+}
+.wre-nb-tree-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  margin: 1px 0;
+  font-size: 13.5px;
+  color: var(--wre-gh-fg);
+  border-radius: 4px;
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: default;
+}
+.wre-nb-tree-item > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wre-nb-tree-item:hover {
+  background: var(--wre-gh-hover-bg);
+}
+.wre-nb-tree-space {
+  color: var(--wre-gh-fg-muted);
+  font-size: 12.5px;
+}
+.wre-nb-tree-active {
+  background: var(--wre-gh-hover-bg);
+  font-weight: 500;
+}
+.wre-nb-doc {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border-radius: 2px;
+  background: var(--wre-gh-fg-muted);
+  opacity: 0.35;
+}
+.wre-nb-tree-space .wre-nb-doc {
+  border-radius: 50%;
+}
+
+/* 正文：Notion 是整页白底长文，没有卡片边框 */
+html[data-wre-skin="notion"].wre-disguise:not(.wre-double-column) .readerChapterContent {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none;
+  padding: 40px 56px !important;
+}
+html[data-wre-skin="notion"].wre-disguise.wre-double-column .wr_horizontalReader_app_content {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+/* 翻页：Notion 没有按钮样式的翻页条，收成右下角两个小箭头 */
+html[data-wre-skin="notion"] .wre-gh-pager {
+  right: 20px;
+  bottom: 16px;
+}
+html[data-wre-skin="notion"] .wre-gh-pager-btn {
+  padding: 2px 9px;
+  font-size: 15px;
+  color: var(--wre-gh-fg-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+}
+html[data-wre-skin="notion"] .wre-gh-pager-btn:hover {
+  background: var(--wre-gh-hover-bg);
+}

@@ -1,0 +1,10 @@
+{
+  "extensionName": {
+    "message": "GitHub Reader",
+    "description": "Extension name (English)"
+  },
+  "extensionDescription": {
+    "message": "Disguise the WeRead web reader as a GitHub repository page. 16 reading background themes, G-key toggle. 100% local, zero upload.",
+    "description": "Extension description (English)"
+  }
+}

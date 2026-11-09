@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>GitHub Reader</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="wre-pop-head">
+    <img class="wre-pop-logo" src="icons/icon-48.png" alt="">
+    <div class="wre-pop-name">GitHub Reader<span class="wre-pop-ver" id="wre-pop-version"></span></div>
+  </header>
+  <p class="wre-pop-tip">把微信读书伪装成 GitHub / Notion 文档 · 只在 weread.qq.com 阅读页生效</p>
+
+  <div class="wre-pop-card">
+    <div class="wre-pop-row">
+      <span class="wre-pop-label">伪装视图</span>
+      <button class="wre-pop-switch" id="wre-pop-disguise" aria-pressed="true"><i></i></button>
+    </div>
+    <div class="wre-pop-row">
+      <span class="wre-pop-label">伪装皮肤</span>
+      <div class="wre-pop-seg" id="wre-pop-skin">
+        <button data-skin="github">GitHub</button>
+        <button data-skin="notion">Notion</button>
+      </div>
+    </div>
+    <p class="wre-pop-hint">阅读页内按 <kbd>G</kbd> 随时一键切换伪装 / 原样</p>
+  </div>
+
+  <div class="wre-pop-card">
+    <div class="wre-pop-row">
+      <span class="wre-pop-label">沉浸模式</span>
+      <button class="wre-pop-switch" id="wre-pop-immersive" aria-pressed="false"><i></i></button>
+    </div>
+    <div class="wre-pop-row">
+      <span class="wre-pop-label">屏占比</span>
+      <div class="wre-pop-range">
+        <input type="range" id="wre-pop-ratio" min="50" max="100" step="1">
+        <span class="wre-pop-value" id="wre-pop-ratio-value">80%</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="wre-pop-card">
+    <div class="wre-pop-row">
+      <span class="wre-pop-label">自动阅读</span>
+      <button class="wre-pop-switch" id="wre-pop-autoread" aria-pressed="false"><i></i></button>
+    </div>
+    <div class="wre-pop-row">
+      <span class="wre-pop-label">速度</span>
+      <div class="wre-pop-range">
+        <input type="range" id="wre-pop-speed" min="10" max="100" step="1">
+        <span class="wre-pop-value" id="wre-pop-speed-value">50</span>
+      </div>
+    </div>
+    <div class="wre-pop-row">
+      <span class="wre-pop-label">方向</span>
+      <div class="wre-pop-seg" id="wre-pop-dir">
+        <button data-dir="down">↓ 向下</button>
+        <button data-dir="up">↑ 向上</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wre-pop-card">
+    <div class="wre-pop-row">
+      <span class="wre-pop-label">正文主题</span>
+      <div class="wre-pop-bg">
+        <button class="wre-pop-arrow" id="wre-pop-bg-prev">‹</button>
+        <span class="wre-pop-swatch" id="wre-pop-swatch"></span>
+        <span class="wre-pop-bg-name" id="wre-pop-bg-name">系统默认</span>
+        <button class="wre-pop-arrow" id="wre-pop-bg-next">›</button>
+      </div>
+    </div>
+    <div class="wre-pop-row">
+      <span class="wre-pop-label">界面外观</span>
+      <div class="wre-pop-seg" id="wre-pop-theme">
+        <button data-theme="light">浅色</button>
+        <button data-theme="dark">深色</button>
+        <button data-theme="auto">跟随系统</button>
+      </div>
+    </div>
+    <p class="wre-pop-hint">外观只影响插件自身界面；正文主题按系统深浅色分档记忆。</p>
+  </div>
+
+  <button class="wre-pop-reset" id="wre-pop-reset">恢复默认设置</button>
+
+  <script src="popup.js"></script>
+</body>
+</html>

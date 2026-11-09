@@ -1,0 +1,10 @@
+{
+  "extensionName": {
+    "message": "GitHub Reader",
+    "description": "扩展名称（简体中文）"
+  },
+  "extensionDescription": {
+    "message": "把微信读书网页版阅读页伪装成 GitHub 仓库页面，摸鱼看书。16 种正文背景色，快捷键 G 一键切换，纯本机、零上传。",
+    "description": "扩展描述（简体中文）"
+  }
+}
