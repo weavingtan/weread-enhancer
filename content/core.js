@@ -150,7 +150,13 @@ function scheduleUnderlineLayerReflow(reason) {
   wreUnderlineReflowTimer = window.setTimeout(() => fire('fallback'), 8000);
 }
 
+// info 级日志默认静默：伪装主题下「F12 一开满屏 [Wechat-Reader-Enhancer]」本身就是暴露面，
+// 而且条数多（每次外观同步都有一条「侧栏留白测量」）。需要详细日志时在 URL 后加
+// #wre-debug（与 #wre-off 同一族逃生开关，不占 UI）。warn / error 始终输出。
+const WRE_DEBUG = /(^|[#&])wre-debug\b/.test(location.hash);
+
 function log(level, message, meta) {
+  if (level === 'info' && !WRE_DEBUG) return;
   const printable = meta ? `${WRE_PREFIX} ${message} ${JSON.stringify(meta)}` : `${WRE_PREFIX} ${message}`;
   if (level === 'error') {
     console.error(printable);
