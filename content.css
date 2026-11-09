@@ -838,14 +838,17 @@ html.wre-disguise #wre-gh-shell {
   background: var(--wre-gh-panel-bg);
 }
 
-/* 伪分页条 */
+/* 伪分页条：容器铺满底部两侧，Previous 在左、Next 在右（像翻页热区）。
+ * 容器本身不接收点击，否则会挡住正文的选中/划线。 */
 .wre-gh-pager {
   display: none;
   position: fixed;
+  left: 32px;
   right: 32px;
   bottom: 24px;
   z-index: 2147482997;
-  gap: 8px;
+  justify-content: space-between;
+  pointer-events: none;
   user-select: none;
 }
 html.wre-disguise.wre-double-column .wre-gh-pager,
@@ -861,6 +864,7 @@ html.wre-disguise .wre-gh-pager.wre-pager-visible {
   border: 1px solid var(--wre-gh-border);
   border-radius: 6px;
   cursor: pointer;
+  pointer-events: auto;
 }
 .wre-gh-pager-btn:hover {
   background: var(--wre-gh-hover-bg);
@@ -1278,8 +1282,9 @@ html[data-wre-skin="notion"].wre-disguise.wre-double-column .wr_horizontalReader
   background: transparent !important;
 }
 
-/* 翻页：Notion 没有按钮样式的翻页条，收成右下角两个小箭头 */
+/* 翻页：Notion 没有按钮样式的翻页条，收成左右两侧的两个小箭头 */
 html[data-wre-skin="notion"] .wre-gh-pager {
+  left: 20px;
   right: 20px;
   bottom: 16px;
 }
