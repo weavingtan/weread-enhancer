@@ -2462,8 +2462,14 @@ function ghChapterTitleText() {
 
 // 微信读书的目录按钮（用于「打开面板后目录项才真的可点」的兜底）
 function ghCatalogPanelToggle() {
-  const nodes = Array.from(document.querySelectorAll('.readerControls_item, [class*="readerControls"] [class*="item"]'));
-  return nodes.find((el) => /catalog/i.test(String(el.className || ''))) || null;
+  const nodes = Array.from(document.querySelectorAll(
+    '.readerControls_item, [class*="readerControls"] [class*="item"], [class*="catalog"][class*="button"]'
+  ));
+  const byClass = nodes.find((el) => /catalog/i.test(String(el.className || '')));
+  if (byClass) return byClass;
+  return Array.from(document.querySelectorAll('[aria-label], [title]')).find((el) => (
+    /目录|catalog|contents/i.test(`${el.getAttribute('aria-label') || ''} ${el.getAttribute('title') || ''}`)
+  )) || null;
 }
 
 function ghCatalogPanelVisible() {
@@ -2485,23 +2491,33 @@ async function ghWaitChapterChange(before, timeout) {
 }
 
 // 跳章：先直接点目录项；没反应说明目录是「面板未打开时的静态副本」，
-// 打开原生目录面板（伪装态下不可见）再点一次。
+// 打开原生目录面板（伪装态下不可见）再点一次。返回 { ok, report } 便于把卡点告诉用户。
 async function ghJumpToCatalogEntry(node, label) {
+  const report = [];
   const before = ghChapterTitleText();
   ghActivateCatalogItem(node);
-  if (!before) return true;
-  if (await ghWaitChapterChange(before, 500)) return true;
+  if (!before) return { ok: true, report };
+  if (await ghWaitChapterChange(before, 500)) return { ok: true, report };
 
+  report.push('直接点无效');
   const toggle = ghCatalogPanelToggle();
-  if (!toggle) return false;
+  if (!toggle) return { ok: false, report: [...report, '没找到目录按钮'] };
+
   toggle.click();
-  await ghSleep(350);
+  await ghSleep(400);
+  const panelOpen = ghCatalogPanelVisible();
   const items = ghCollectCatalogItems();
-  const target = items.find((el) => (el.textContent || '').trim() === label) || items[0];
-  if (target) ghActivateCatalogItem(target);
-  const ok = await ghWaitChapterChange(before, 700);
+  report.push(`面板${panelOpen ? '已开' : '未开'}·${items.length}项`);
+
+  const target = items.find((el) => (el.textContent || '').trim() === label);
+  if (!target) {
+    if (ghCatalogPanelVisible()) toggle.click();
+    return { ok: false, report: [...report, '面板里没有该章'] };
+  }
+  ghActivateCatalogItem(target);
+  const ok = await ghWaitChapterChange(before, 800);
   if (ghCatalogPanelVisible()) toggle.click();
-  return ok;
+  return { ok, report: [...report, ok ? '面板点成功' : '面板点无效'] };
 }
 
 function ghRenderCatalogTree(force) {
@@ -2518,7 +2534,9 @@ function ghRenderCatalogTree(force) {
   const activeIdx = ghCatalogActiveIndex(items);
   // 章节列表或当前章节变了才重建，避免每次同步都重写 DOM
   const signature = `${items.map((el) => (el.textContent || '').trim()).join('|')}#${activeIdx}`;
-  if (signature === ghCatalogSignature) return;
+  // 微信读书重渲染过目录（节点被换掉）时，缓存的引用全部失效 → 强制重铺一遍
+  const refsStale = ghCatalogRefs.length > 0 && ghCatalogRefs.some((el) => !el.isConnected);
+  if (!refsStale && signature === ghCatalogSignature) return;
   ghCatalogSignature = signature;
 
   if (items.length === 0) {
@@ -2526,26 +2544,45 @@ function ghRenderCatalogTree(force) {
     return;
   }
 
-  tree.innerHTML = items.map((el, i) => `
-    <div class="wre-gh-tree-item${i === activeIdx ? ' wre-gh-tree-active' : ''}" data-catalog="${i}">
+  tree.innerHTML = items.map((el, i) => {
+    const chapter = (el.textContent || '').trim().replace(/"/g, '&quot;');
+    return `
+    <div class="wre-gh-tree-item${i === activeIdx ? ' wre-gh-tree-active' : ''}"
+      data-catalog="${i}" data-chapter="${chapter}">
       ${WRE_SVG.file}
       <span>${ghChapterFileName(el.textContent)}</span>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
-  // 渲染时把原始节点存下来：页面重渲染后索引可能错位，用引用更稳
+  // 渲染时把原始节点存下来：页面重渲染后索引会错位，引用也可能失效，
+  // 所以点击时还要按 data-chapter 的章节名兜底匹配。
   ghCatalogRefs = items.slice();
   tree.querySelectorAll('[data-catalog]').forEach((node) => {
     node.addEventListener('click', async () => {
       const idx = Number(node.dataset.catalog);
-      const ref = ghCatalogRefs[idx];
-      const target = (ref && ref.isConnected) ? ref : ghCollectCatalogItems()[idx];
-      if (!target) return;
-      const label = (target.textContent || '').trim();
-      log('info', '侧栏目录跳章', { idx, chapter: label });
-      const ok = await ghJumpToCatalogEntry(target, label);
-      if (!ok) ghToast('这一章没跳过去，可能目录还没加载完');
+      const chapter = node.dataset.chapter || '';
+      const target = ghFindCatalogItem(idx, chapter);
+      if (!target) {
+        ghToast('目录里找不到这一章，稍后再试');
+        return;
+      }
+      log('info', '侧栏目录跳章', { idx, chapter });
+      const result = await ghJumpToCatalogEntry(target, chapter);
+      if (!result.ok) ghToast(`跳章失败：${result.report.join(' · ')}`);
     });
   });
+}
+
+// 找目录项：优先用「还连着 DOM 且章节名对得上」的引用，其次按章节名重新查
+function ghFindCatalogItem(idx, chapter) {
+  const ref = ghCatalogRefs[idx];
+  if (ref && ref.isConnected && (!chapter || (ref.textContent || '').trim() === chapter)) return ref;
+  const items = ghCollectCatalogItems();
+  if (chapter) {
+    const hit = items.find((el) => (el.textContent || '').trim() === chapter);
+    if (hit) return hit;
+  }
+  return items[idx] || null;
 }
 
 function ghShellHtmlGithub() {
