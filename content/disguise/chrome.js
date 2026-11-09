@@ -278,14 +278,28 @@ function ghHideNativePager() {
     || document.querySelector('.wr_horizontalReader')
     || document.querySelector('.readerContent');
   if (!scope) return;
-  scope.querySelectorAll('button, [class*="button"], [class*="pager"], [class*="Pager"], span, div').forEach((el) => {
-    if (el.children.length) return; // 只看叶子
-    if (!GH_NATIVE_PAGER_TEXTS.includes((el.textContent || '').trim())) return;
-    const host = el.closest('button, [class*="button"], [class*="pager"], [class*="Pager"]') || el;
-    if (host.dataset.wreHidden === '1') return;
-    host.dataset.wreHidden = '1';
-    host.style.setProperty('display', 'none', 'important');
-  });
+
+  // 逐个文本节点找「上一页/下一页」：比对整章几万个子孙跑 5 个属性选择器便宜得多。
+  // closest 的 4 个选择器只在真正命中时才执行（一章通常 0~2 个）。
+  const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, null);
+  let hidden = 0;
+  let node = walker.nextNode();
+  while (node) {
+    const text = (node.nodeValue || '').trim();
+    if (text && GH_NATIVE_PAGER_TEXTS.includes(text)) {
+      const el = node.parentElement;
+      const host = el
+        ? (el.closest('button, [class*="button"], [class*="pager"], [class*="Pager"]') || el)
+        : null;
+      if (host && host.dataset.wreHidden !== '1') {
+        host.dataset.wreHidden = '1';
+        host.style.setProperty('display', 'none', 'important');
+        hidden += 1;
+      }
+    }
+    node = walker.nextNode();
+  }
+  if (hidden) log('info', '隐藏原生翻页按钮', { hidden });
 }
 
 // 防重入 + 状态签名去重：观察器回调里调用的样式同步必须幂等，

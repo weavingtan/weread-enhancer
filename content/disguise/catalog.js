@@ -16,16 +16,46 @@ const GH_CATALOG_SCOPES = [
   '[class*="catalog"]',
 ];
 
+// 目录采集结果缓存：几百章时「全量 querySelectorAll + 逐项读 textContent」不便宜，
+// 而观察器每次同步都会调到这里。用「目录面板脏标记」代替重复采集：
+// 面板结构变化或行 class（当前章高亮）变化时置脏，下次再重新采。
+let ghCatalogCache = { items: [], root: null, dirty: true };
+
+let ghCatalogWatch = null;
+
+function ghCatalogInvalidate() {
+  ghCatalogCache.dirty = true;
+}
+
+function ghWatchCatalogRoot(root) {
+  if (!root) return;
+  if (ghCatalogCache.root === root && ghCatalogWatch) return;
+  if (ghCatalogWatch) ghCatalogWatch.disconnect();
+  ghCatalogWatch = new MutationObserver(ghCatalogInvalidate);
+  ghCatalogWatch.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  ghCatalogCache.root = root;
+}
+
+function ghCacheCatalogItems(root, items) {
+  ghCatalogCache.items = items;
+  ghCatalogCache.dirty = false;
+  ghWatchCatalogRoot(root);
+  return items;
+}
+
 // 从微信读书目录 DOM 里取章节项；取不到返回空数组，调用方回退静态假树。
 // 章节名固定是 .readerCatalog_list_item_title_text（a.html 实测每章一个），
 // 直接按它取最稳：笼统按 li/[class*=item] 取会把行内 meta（「当前读到 40%」「书签」）也算成章节。
 function ghCollectCatalogItems() {
+  if (!ghCatalogCache.dirty && ghCatalogCache.root && ghCatalogCache.root.isConnected) {
+    return ghCatalogCache.items;
+  }
   for (const sel of GH_CATALOG_SCOPES) {
     const root = document.querySelector(sel);
     if (!root) continue;
     const titled = Array.from(root.querySelectorAll('[class*="list_item_title_text"]'))
       .filter((el) => (el.textContent || '').trim().length > 0);
-    if (titled.length >= 3) return titled;
+    if (titled.length >= 3) return ghCacheCatalogItems(root, titled);
     const raw = Array.from(root.querySelectorAll('li, [class*="item"], [class*="Item"]'));
     if (raw.length < 3) continue;
     const items = raw.filter((el) => {
@@ -33,8 +63,11 @@ function ghCollectCatalogItems() {
       const text = (el.textContent || '').trim();
       return text.length > 0 && text.length <= 80;
     });
-    if (items.length >= 3) return items;
+    if (items.length >= 3) return ghCacheCatalogItems(root, items);
   }
+  // 目录还没渲染（书城页 / 阅读器刚起来）：不缓存，下次重查
+  ghCatalogCache.items = [];
+  ghCatalogCache.dirty = true;
   return [];
 }
 
@@ -52,7 +85,16 @@ function ghChapterFileName(text) {
   return /\.\w{1,5}$/.test(base) ? base : `${base}.md`;
 }
 
-let ghCatalogSignature = '';
+// 上次渲染用的采集结果（同一数组引用）与当前章索引：都没变就不必重铺 DOM，
+// 也不再需要把每章名字 join 成字符串签名（几百章时那次 join 本身就是开销）。
+let ghCatalogRenderItems = null;
+
+let ghCatalogRenderActive = -2;
+
+function ghResetCatalogRender() {
+  ghCatalogRenderItems = null;
+  ghCatalogRenderActive = -2;
+}
 
 let ghLastCatalogScan = 0;
 
@@ -250,12 +292,12 @@ function ghRenderCatalogTree(force) {
 
   const items = ghCollectCatalogItems();
   const activeIdx = ghCatalogActiveIndex(items);
-  // 章节列表或当前章节变了才重建，避免每次同步都重写 DOM
-  const signature = `${items.map((el) => (el.textContent || '').trim()).join('|')}#${activeIdx}`;
   // 微信读书重渲染过目录（节点被换掉）时，缓存的引用全部失效 → 强制重铺一遍
   const refsStale = ghCatalogRefs.length > 0 && ghCatalogRefs.some((el) => !el.isConnected);
-  if (!refsStale && signature === ghCatalogSignature) return;
-  ghCatalogSignature = signature;
+  // items 是缓存数组：引用不变 + 当前章没变 ＝ 目录没动，直接跳过（不再 join 几百个章节名）
+  if (!force && !refsStale && items === ghCatalogRenderItems && activeIdx === ghCatalogRenderActive) return;
+  ghCatalogRenderItems = items;
+  ghCatalogRenderActive = activeIdx;
 
   if (items.length === 0) {
     tree.innerHTML = ghFallbackTreeHtml();
@@ -535,7 +577,7 @@ function ghEnsureShell(force) {
   document.body.appendChild(shell);
   document.documentElement.dataset.wreSkin = skin;
   ghBindShell(shell);
-  ghCatalogSignature = ''; // 骨架重建后目录要重新铺一遍
+  ghResetCatalogRender(); // 骨架重建后目录要重新铺一遍
   ghRenderCatalogTree(true);
   return shell;
 }
