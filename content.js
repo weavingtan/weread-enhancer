@@ -2466,25 +2466,26 @@ function ghChapterTitleText() {
   return (para?.textContent || '').trim().slice(0, 40);
 }
 
-// 微信读书的目录按钮（用于「打开面板后目录项才真的可点」的兜底）
+// 微信读书的目录入口：优先「文字/aria 里写了目录」的控件，最后退回顶栏章名
 function ghCatalogPanelToggle() {
   const nodes = Array.from(document.querySelectorAll(
-    '.readerControls_item, [class*="readerControls"] [class*="item"], [class*="catalog"][class*="button"]'
+    '.readerControls_item, [class*="readerControls"] [class*="item"], [aria-label], [title]'
   ));
-  const byClass = nodes.find((el) => /catalog/i.test(String(el.className || '')));
-  if (byClass) return byClass;
-  return Array.from(document.querySelectorAll('[aria-label], [title]')).find((el) => (
-    /目录|catalog|contents/i.test(`${el.getAttribute('aria-label') || ''} ${el.getAttribute('title') || ''}`)
-  )) || null;
+  const byText = nodes.find((el) => /目录|catalog|contents/i.test(
+    `${el.className} ${el.getAttribute('aria-label') || ''} ${el.getAttribute('title') || ''} ${el.textContent || ''}`
+  ));
+  if (byText) return byText;
+  return document.querySelector('.readerTopBar_title_chapter')
+    || document.querySelector('[class*="readerTopBar_title"]');
 }
 
+// 面板是否真的开了：看目录项自身有没有尺寸（比摸容器 class 靠谱）
 function ghCatalogPanelVisible() {
-  const root = document.querySelector('.readerCatalog')
-    || document.querySelector('[class*="readerCatalog"]')
-    || document.querySelector('[class*="catalog"]');
-  if (!root) return false;
-  const rect = root.getBoundingClientRect();
-  return rect.width > 0 && rect.height > 0;
+  const items = ghCollectCatalogItems();
+  return items.some((el) => {
+    const rect = el.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  });
 }
 
 async function ghWaitChapterChange(before, timeout) {
@@ -2509,11 +2510,12 @@ async function ghJumpToCatalogEntry(node, label) {
   const toggle = ghCatalogPanelToggle();
   if (!toggle) return { ok: false, report: [...report, '没找到目录按钮'] };
 
-  toggle.click();
-  await ghSleep(400);
+  // 伪装态下原生工具栏是 pointer-events:none，直接 .click() 不够，补全套指针事件
+  ghActivateCatalogItem(toggle);
+  await ghSleep(450);
   const panelOpen = ghCatalogPanelVisible();
   const items = ghCollectCatalogItems();
-  report.push(`面板${panelOpen ? '已开' : '未开'}·${items.length}项`);
+  report.push(`面板${panelOpen ? '已开' : '未开'}·${items.length}项·按钮${String(toggle.className || toggle.tagName).slice(0, 20)}`);
 
   const target = items.find((el) => (el.textContent || '').trim() === label);
   if (!target) {
