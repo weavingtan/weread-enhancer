@@ -1,0 +1,304 @@
+/* 标签页身份 + 外观同步 + 侧栏留白 + 隐藏原生分页
+ * 由 content.js 拆分而来：语句顺序与原文件一致，跨文件共享同一全局作用域。
+ */
+
+let ghTitleObserver = null;
+
+let ghOriginalTitle = null;
+
+let ghOriginalFavicons = null;
+
+function ghIdentityTarget() {
+  return wreCurrentSkin() === 'notion'
+    ? { title: WRE_NB_PAGE_TITLE, favicon: WRE_NB_FAVICON }
+    : { title: WRE_GH_PAGE_TITLE, favicon: WRE_GH_FAVICON };
+}
+
+function ghApplyPageIdentity() {
+  const target = ghIdentityTarget();
+  if (ghOriginalTitle === null) ghOriginalTitle = document.title;
+  if (document.title !== target.title) document.title = target.title;
+
+  const links = Array.from(document.querySelectorAll('link[rel~="icon"]'));
+  if (!ghOriginalFavicons) {
+    ghOriginalFavicons = links.map((el) => ({ el, href: el.getAttribute('href') }));
+  }
+  if (links.length > 0) {
+    links.forEach((el) => el.setAttribute('href', target.favicon));
+  } else {
+    let link = document.getElementById('wre-gh-favicon');
+    if (!link) {
+      link = document.createElement('link');
+      link.id = 'wre-gh-favicon';
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    link.setAttribute('href', target.favicon);
+  }
+
+  if (ghTitleObserver) return;
+  const titleEl = document.querySelector('title');
+  if (titleEl) {
+    ghTitleObserver = new MutationObserver(() => {
+      if (!document.documentElement.classList.contains('wre-disguise')) return;
+      const want = ghIdentityTarget().title;
+      if (document.title !== want) document.title = want;
+    });
+    ghTitleObserver.observe(titleEl, { childList: true, characterData: true, subtree: true });
+  }
+}
+
+function ghRestorePageIdentity() {
+  if (ghTitleObserver) {
+    ghTitleObserver.disconnect();
+    ghTitleObserver = null;
+  }
+  if (ghOriginalFavicons) {
+    ghOriginalFavicons.forEach(({ el, href }) => {
+      if (el && el.isConnected && href) el.setAttribute('href', href);
+    });
+    ghOriginalFavicons = null;
+  }
+  document.getElementById('wre-gh-favicon')?.remove();
+  if (ghOriginalTitle !== null) {
+    document.title = ghOriginalTitle;
+    ghOriginalTitle = null;
+  }
+}
+
+const GH_NATIVE_PAGER_TEXTS = ['上一页', '下一页', '上一章', '下一章', '上一节', '下一节'];
+
+let ghLastPagerSweep = 0;
+
+const GH_SIDEBAR_MIN_W = 120;
+
+const GH_SIDEBAR_MAX_W = 248;
+
+let ghSidebarVisualW = '';
+
+let ghInkCache = { key: '', left: null };
+
+function ghCanvasInkLeft(canvas, rect) {
+  if (!canvas.width || !canvas.height || !rect.width) return null;
+  const scale = canvas.width / rect.width;
+  if (!Number.isFinite(scale) || scale <= 0) return null;
+  let ctx = null;
+  try {
+    ctx = canvas.getContext('2d', { willReadFrequently: true });
+  } catch (e) {
+    return null;
+  }
+  if (!ctx) return null;
+
+  // 大屏双栏正文居中，页边距可能落在 300px 开外：扫描范围放宽到 600 CSS px
+  const scanW = Math.max(1, Math.min(canvas.width, Math.round(Math.min(rect.width, 600) * scale)));
+  const stepY = Math.max(1, Math.round(10 * scale)); // 每 10 CSS px 采一行
+  const startY = Math.round(canvas.height * 0.05);   // 避开顶部装饰
+  const endY = Math.round(canvas.height * 0.92);     // 避开底部进度
+  let bg = null;
+  try {
+    bg = ctx.getImageData(1, 1, 1, 1).data;
+  } catch (e) {
+    return null;
+  }
+  const transparentBg = bg[3] < 12;
+
+  // 逐行 getImageData 会触发 Chrome 的「Multiple readback operations…」警告，
+  // 而且每次读回都要同步 CPU。改成一次读回 8 行的条带，读回次数降到原来的 1/8。
+  const rowsPerChunk = 8;
+  for (let y = startY; y < endY; y += stepY * rowsPerChunk) {
+    const chunkH = Math.min(stepY * rowsPerChunk, endY - y);
+    let block = null;
+    try {
+      block = ctx.getImageData(0, y, scanW, chunkH).data;
+    } catch (e) {
+      return null;
+    }
+    for (let ry = 0; ry < chunkH; ry += stepY) {
+      const rowOffset = ry * scanW * 4;
+      for (let x = 0; x < scanW; x++) {
+        const i = rowOffset + x * 4;
+        const isInk = transparentBg
+          ? block[i + 3] > 24
+          : Math.abs(block[i] - bg[0]) + Math.abs(block[i + 1] - bg[1]) + Math.abs(block[i + 2] - bg[2]) > 36;
+        if (isInk) return rect.left + x / scale;
+      }
+    }
+  }
+  return null;
+}
+
+function ghMeasureDoubleColumnLeft() {
+  const canvases = Array.from(document.querySelectorAll('.wr_canvasContainer canvas'));
+  if (canvases.length) {
+    const canvas = canvases.reduce((a, b) => (
+      a.getBoundingClientRect().left <= b.getBoundingClientRect().left ? a : b
+    ));
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width > 0) {
+      const key = `${Math.round(rect.left)}|${Math.round(rect.width)}|${canvas.width}x${canvas.height}`;
+      if (ghInkCache.key !== key) {
+        ghInkCache = { key, left: ghCanvasInkLeft(canvas, rect) };
+      }
+      if (ghInkCache.left !== null) return ghInkCache.left;
+      return rect.left;
+    }
+  }
+  const candidates = [
+    document.querySelector('.readerChapterContent'),
+    document.querySelector('.wr_horizontalReader_app_content'),
+  ].filter(Boolean);
+  let left = Infinity;
+  candidates.forEach((el) => {
+    const r = el.getBoundingClientRect?.();
+    if (r && r.width > 0 && r.left >= 0) left = Math.min(left, r.left);
+  });
+  return Number.isFinite(left) ? left : null;
+}
+
+function ghApplySidebarVisualWidth(widthPx) {
+  const root = document.documentElement;
+  const next = `${widthPx}px`;
+  if (ghSidebarVisualW !== next) {
+    ghSidebarVisualW = next;
+    root.style.setProperty('--wre-gh-sidebar-visual-w', next);
+  }
+  root.classList.add('wre-gh-sidebar-ok');
+}
+
+function ghClearSidebarFits() {
+  const root = document.documentElement;
+  root.classList.remove('wre-gh-sidebar-ok');
+  if (ghSidebarVisualW) {
+    ghSidebarVisualW = '';
+    root.style.removeProperty('--wre-gh-sidebar-visual-w');
+  }
+}
+
+function ghSyncSidebarFits() {
+  if (!document.querySelector('.wre-gh-sidebar')) return;
+
+  let left = null;
+  if (ghIsDoubleColumn()) {
+    left = ghMeasureDoubleColumnLeft();
+  } else {
+    const isScroll = document.documentElement.classList.contains('wre-gh-scroll');
+    const el = isScroll
+      ? (document.querySelector('.app_content') || document.querySelector('.readerChapterContent'))
+      : document.querySelector('.readerChapterContent');
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 0) left = rect.left;
+    }
+  }
+
+  // 留 10px 呼吸位，绝不贴着字裁断
+  const avail = left === null ? 0 : Math.floor(left - 10);
+  if (avail >= GH_SIDEBAR_MIN_W) {
+    ghApplySidebarVisualWidth(Math.min(GH_SIDEBAR_MAX_W, avail));
+  } else {
+    ghClearSidebarFits();
+  }
+}
+
+function ghHideNativePager() {
+  const now = Date.now();
+  if (now - ghLastPagerSweep < 2000) return; // 低频：避免与微信读书重渲染互相触发
+  ghLastPagerSweep = now;
+  const scope = document.querySelector('.readerChapterContent_container')
+    || document.querySelector('.wr_horizontalReader')
+    || document.querySelector('.readerContent');
+  if (!scope) return;
+  scope.querySelectorAll('button, [class*="button"], [class*="pager"], [class*="Pager"], span, div').forEach((el) => {
+    if (el.children.length) return; // 只看叶子
+    if (!GH_NATIVE_PAGER_TEXTS.includes((el.textContent || '').trim())) return;
+    const host = el.closest('button, [class*="button"], [class*="pager"], [class*="Pager"]') || el;
+    if (host.dataset.wreHidden === '1') return;
+    host.dataset.wreHidden = '1';
+    host.style.setProperty('display', 'none', 'important');
+  });
+}
+
+let ghSyncing = false;
+
+let ghChromeSignature = '';
+
+function ghSyncChrome(force) {
+  if (ghSyncing) return;
+  ghSyncing = true;
+  try {
+    ghSyncChromeInner(force);
+  } catch (e) {
+    log('error', '伪装外观同步失败', { error: String(e) });
+  } finally {
+    ghSyncing = false;
+  }
+}
+
+let ghLastSizeSig = '';
+
+let ghLastCardBg = '';
+
+let ghLastModeReflowAt = 0;
+
+let ghTopbarH = '';
+
+function ghSizeSignature() {
+  const canvas = document.querySelector('.wr_canvasContainer canvas');
+  const c = canvas ? `${canvas.width}x${canvas.height}` : 'none';
+  return `${window.innerWidth}x${window.innerHeight}|${c}`;
+}
+
+function ghSyncChromeInner(force) {
+  const nativeBar = document.querySelector('.readerTopBar');
+  const barHeight = nativeBar?.getBoundingClientRect?.().height;
+  if (barHeight && barHeight > 20) {
+    const want = `${Math.round(barHeight)}px`;
+    if (ghTopbarH !== want) {
+      ghTopbarH = want;
+      document.documentElement.style.setProperty('--wre-gh-topbar-h', want);
+    }
+  }
+  const dark = !document.body.classList.contains('wr_whiteTheme');
+  const wasDouble = document.documentElement.classList.contains('wre-double-column');
+  const isDouble = ghIsDoubleColumn();
+  const isScroll = !isDouble && detectScrollMode();
+
+  // 签名去重：只有「深色/双栏/滚动」这几个 class 相关状态变化时才动 class 与重排，
+  // 避免「改 class → 观察器 → 再改 class 的死循环」。
+  const signature = `${dark}|${isDouble}|${isScroll}`;
+  const statusChanged = force || signature !== ghChromeSignature;
+  if (statusChanged) {
+    ghChromeSignature = signature;
+    document.documentElement.classList.toggle('wre-gh-dark', dark);
+    document.documentElement.classList.toggle('wre-double-column', isDouble);
+    document.documentElement.classList.toggle('wre-gh-scroll', isScroll);
+    if (wasDouble !== isDouble) {
+      // 模式切换后让微信读书按新容器宽度重排（尤其双栏 Canvas）。
+      // 1.2s 内只允许一次：重排期间 canvas 会短暂 0 尺寸，来回翻转会连锁触发，
+      // 表现就是拖一下窗口「连刷两下」。
+      const now = Date.now();
+      if (now - ghLastModeReflowAt > 1200) {
+        ghLastModeReflowAt = now;
+        setTimeout(() => triggerWereadLayoutReflow('gh-mode-switch'), 120);
+      }
+    }
+  }
+
+  // 尺寸真的变了才重新量留白（这一步含 getBoundingClientRect，会强制布局）
+  const sizeSig = ghSizeSignature();
+  if (statusChanged || sizeSig !== ghLastSizeSig) {
+    ghLastSizeSig = sizeSig;
+    ghSyncSidebarFits();
+  }
+  ghRenderCatalogTree();
+
+  // 伪装态正文固定 GitHub 卡片色：暖色/米黄主题留在「按 G 退出伪装」时自己看。
+  // 米黄卡片贴在灰白外壳上色块断层太明显，一眼就看得出不是网页。
+  const cardBg = dark ? '#0d1117' : '#ffffff';
+  if (cardBg !== ghLastCardBg) {
+    ghLastCardBg = cardBg;
+    document.documentElement.style.setProperty('--wre-gh-card-bg', cardBg);
+  }
+  ghPublishActiveTheme();
+}

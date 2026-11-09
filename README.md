@@ -31,8 +31,14 @@
 ```
 weread-enhancer/
 │
-├── manifest.json          # 扩展入口
-├── content.js             # 全部逻辑：伪装骨架 / 背景色 / 快捷键 / 状态存储
+├── manifest.json          # 扩展入口（按顺序声明 content/ 下各模块）
+├── content/               # content script 模块（无构建，共享全局作用域，按 manifest 顺序加载）
+│   ├── core.js            # 常量 / 状态 / 存储 / 日志 / 元素定位
+│   ├── layout.js          # 样式表与屏占比（工具栏浮动、自绘滚动条）
+│   ├── features/          # 沉浸模式、自动阅读、主题背景色、Canvas 自愈、快捷键
+│   ├── ui.js              # 设置面板与事件绑定
+│   ├── disguise/          # GitHub / Notion 伪装：骨架、目录跳章、标签页身份、伪分页、生命周期
+│   └── boot.js            # init 入口（必须最后加载）
 ├── content.css            # 伪装样式（html.wre-disguise 总开关）+ 设置面板样式
 ├── popup.html / popup.js / popup.css   # 工具栏弹窗
 ├── icons/                 # 插件图标

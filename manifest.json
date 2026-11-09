@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extensionName__",
-  "version": "0.39.12",
+  "version": "0.39.13",
   "description": "__MSG_extensionDescription__",
   "default_locale": "zh_CN",
   "action": {
@@ -30,7 +30,20 @@
         "content.css"
       ],
       "js": [
-        "content.js"
+        "content/core.js",
+        "content/layout.js",
+        "content/features/immersive.js",
+        "content/features/autoread.js",
+        "content/features/theme.js",
+        "content/features/heal.js",
+        "content/features/shortcuts.js",
+        "content/ui.js",
+        "content/disguise/shell.js",
+        "content/disguise/catalog.js",
+        "content/disguise/chrome.js",
+        "content/disguise/pager.js",
+        "content/disguise/lifecycle.js",
+        "content/boot.js"
       ],
       "run_at": "document_end"
     }

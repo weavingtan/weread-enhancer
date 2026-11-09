@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  // 与 content.js 的 WRE_BG_COLORS 保持一致（顺序 / 色值 / 深浅分组）
+  // 与 content/features/theme.js 的 WRE_BG_COLORS 保持一致（顺序 / 色值 / 深浅分组）
   const BG_COLORS = [
     { name: '系统默认', rgb: null, type: 'light' },
     { name: 'Claude 暖白', rgb: '#FAF5EE', type: 'light' },

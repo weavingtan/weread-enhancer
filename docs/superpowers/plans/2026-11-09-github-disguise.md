@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-09-github-disguise-design.md`
 
+> **实施状态（2026-11-10 更新）**：任务已全部落地。文中出现的 `content.js` 指当时的单文件形态；后续为可维护性按职责拆成 `content/` 下 14 个模块（`core` / `layout` / `features/*` / `ui` / `disguise/*` / `boot`），由 `manifest.json` 按顺序加载、共享同一全局作用域，功能与行为不变。阅读本计划时把 `content.js` 对应到这些模块即可。
+
 ---
 
 ### Task 1: content.js 重写为精简核心（状态/存储/日志/键盘守卫）
