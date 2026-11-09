@@ -2454,6 +2454,56 @@ function ghActivateCatalogItem(el) {
   });
 }
 
+const ghSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function ghChapterTitleText() {
+  return (document.querySelector('.readerTopBar_title_chapter')?.textContent || '').trim();
+}
+
+// 微信读书的目录按钮（用于「打开面板后目录项才真的可点」的兜底）
+function ghCatalogPanelToggle() {
+  const nodes = Array.from(document.querySelectorAll('.readerControls_item, [class*="readerControls"] [class*="item"]'));
+  return nodes.find((el) => /catalog/i.test(String(el.className || ''))) || null;
+}
+
+function ghCatalogPanelVisible() {
+  const root = document.querySelector('.readerCatalog')
+    || document.querySelector('[class*="readerCatalog"]')
+    || document.querySelector('[class*="catalog"]');
+  if (!root) return false;
+  const rect = root.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
+async function ghWaitChapterChange(before, timeout) {
+  for (let waited = 0; waited < timeout; waited += 100) {
+    await ghSleep(100);
+    const now = ghChapterTitleText();
+    if (now && now !== before) return true;
+  }
+  return false;
+}
+
+// 跳章：先直接点目录项；没反应说明目录是「面板未打开时的静态副本」，
+// 打开原生目录面板（伪装态下不可见）再点一次。
+async function ghJumpToCatalogEntry(node, label) {
+  const before = ghChapterTitleText();
+  ghActivateCatalogItem(node);
+  if (!before) return true;
+  if (await ghWaitChapterChange(before, 500)) return true;
+
+  const toggle = ghCatalogPanelToggle();
+  if (!toggle) return false;
+  toggle.click();
+  await ghSleep(350);
+  const items = ghCollectCatalogItems();
+  const target = items.find((el) => (el.textContent || '').trim() === label) || items[0];
+  if (target) ghActivateCatalogItem(target);
+  const ok = await ghWaitChapterChange(before, 700);
+  if (ghCatalogPanelVisible()) toggle.click();
+  return ok;
+}
+
 function ghRenderCatalogTree(force) {
   if (wreCurrentSkin() !== 'github') return;
   // 目录可能有几百章，正文滚动时观察器会频繁触发同步：1.5s 内不重复全量扫描
@@ -2485,21 +2535,15 @@ function ghRenderCatalogTree(force) {
   // 渲染时把原始节点存下来：页面重渲染后索引可能错位，用引用更稳
   ghCatalogRefs = items.slice();
   tree.querySelectorAll('[data-catalog]').forEach((node) => {
-    node.addEventListener('click', () => {
+    node.addEventListener('click', async () => {
       const idx = Number(node.dataset.catalog);
       const ref = ghCatalogRefs[idx];
       const target = (ref && ref.isConnected) ? ref : ghCollectCatalogItems()[idx];
       if (!target) return;
-      const before = (document.querySelector('.readerTopBar_title_chapter')?.textContent || '').trim();
-      ghActivateCatalogItem(target);
-      log('info', '侧栏目录跳章', { idx, chapter: (target.textContent || '').trim() });
-      // 微信读书目录懒加载时点击会静默失败：700ms 后章名没变就明确告诉用户一次
-      if (before) {
-        setTimeout(() => {
-          const after = (document.querySelector('.readerTopBar_title_chapter')?.textContent || '').trim();
-          if (after === before) ghToast('这一章没跳过去，先点开一次目录再试');
-        }, 700);
-      }
+      const label = (target.textContent || '').trim();
+      log('info', '侧栏目录跳章', { idx, chapter: label });
+      const ok = await ghJumpToCatalogEntry(target, label);
+      if (!ok) ghToast('这一章没跳过去，可能目录还没加载完');
     });
   });
 }

@@ -1304,3 +1304,11 @@ html[data-wre-skin="notion"] .wre-gh-pager-btn {
 html[data-wre-skin="notion"] .wre-gh-pager-btn:hover {
   background: var(--wre-gh-hover-bg);
 }
+
+/* 原生目录面板：伪装态下不可见——我们只用它「面板已打开」的可点击状态来跳章，
+ * 面板本身露出来就是微信读书原样，必须盖掉。 */
+html.wre-disguise [class*="readerCatalog"],
+html.wre-disguise [class*="catalogPanel"] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
