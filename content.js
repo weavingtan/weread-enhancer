@@ -2587,7 +2587,28 @@ async function ghHandleCatalogClick(node) {
   }
   log('info', '侧栏目录跳章', { idx, chapter });
   const result = await ghJumpToCatalogEntry(target, chapter);
-  if (!result.ok) ghToast(`跳章失败：${result.report.join(' · ')}`);
+  if (result.ok) return;
+  ghToast(`跳章失败：${result.report.join(' · ')}（诊断已复制）`);
+  ghCopyDiagnostics(target);
+}
+
+// 把目录项 / 目录按钮的真实结构复制到剪贴板，便于定位微信读书到底怎么绑定跳转
+function ghCopyDiagnostics(target) {
+  const controls = Array.from(document.querySelectorAll('.readerControls_item'))
+    .map((el) => `${el.className}｜${(el.textContent || '').trim().slice(0, 10)}｜${el.getAttribute('aria-label') || el.getAttribute('title') || ''}`)
+    .join('\n');
+  const catalogRoot = document.querySelector('.readerCatalog') || document.querySelector('[class*="catalog"]');
+  const text = [
+    `URL: ${location.href}`,
+    `item: ${target?.outerHTML?.slice(0, 900) || '(null)'}`,
+    `parent: ${target?.parentElement?.outerHTML?.slice(0, 400) || '(null)'}`,
+    `catalogRoot: ${catalogRoot?.className || '(none)'}`,
+    `controls:\n${controls}`,
+  ].join('\n\n');
+  log('info', '目录诊断', { text });
+  try {
+    navigator.clipboard?.writeText(text).catch(() => { /* 剪贴板不可用就只留 console */ });
+  } catch (e) { /* 忽略 */ }
 }
 
 // 用捕获阶段委托：即使侧栏 DOM 被整体重建，监听依然有效；
